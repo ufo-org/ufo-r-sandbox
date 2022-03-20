@@ -1,4 +1,4 @@
 library(testthat)
-library(helloextendr)
+library(uforemote)
 
-test_check("helloextendr")
+test_check("uforemote")

@@ -1,10 +1,16 @@
-# Minimal Example of Calling Rust from R
+# UFO R Remote
 
-[![R build status](https://github.com/extendr/helloextendr/workflows/R-CMD-check/badge.svg)](https://github.com/extendr/helloextendr/actions)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+This is a package that listens for requests to execute code by other 
+processes. The code is transferred via a socket in the form of serialized 
+byte-code compiled functions. The client deserializes the function, executes 
+it, and passes back the result.
 
-This is a template package to demonstrate how to call Rust from R using the [extendr-api](https://crates.io/crates/extendr-api) crate.
+### Notes
 
+* Entry function that starts the entire "server" loop, e.g. `uforemote::serve`.
+  This sets up and calls a Rust function that starts waiting for incoming
+  communication.
+* 
 
 ## Installation
 
@@ -18,16 +24,16 @@ rustup target add i686-pc-windows-gnu
 
 Once Rust is working, you can install this package via:
 ```r
-remotes::install_github("extendr/helloextendr")
+remotes::install_github("ufo-org/ufo-r-remote")
 ```
 
-After installation, the following should work:
+<!-- After installation, the following should work:
 ```r
-library(helloextendr)
+library(uforemote)
 
 hello_world()
 #> [1] "Hello world!"
-```
+``` -->
 
 ## Development
 

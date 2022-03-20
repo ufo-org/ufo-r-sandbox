@@ -1,0 +1,42 @@
+---
+
+remote config:
+
+NEW      => f()
+POPULATE => g()
+...
+
+---
+
+
+f <- serialize(compiler::cmpfun(function(x) x + 1))
+---
+
+new ufo:
+
+push f
+register_fun
+
+recv -> fun_id
+
+push serialized user_obj
+
+---
+
+populate:
+
+push fun_id
+push start_ix
+push end_ix
+call
+
+recv -> serialized result
+
+---
+
+write out/update:
+
+...
+
+
+

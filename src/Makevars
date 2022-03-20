@@ -1,7 +1,7 @@
 TARGET_DIR = ./rust/target
 LIBDIR = $(TARGET_DIR)/release
-STATLIB = $(LIBDIR)/libhelloextendr.a
-PKG_LIBS = -L$(LIBDIR) -lhelloextendr
+STATLIB = $(LIBDIR)/libuforemote.a
+PKG_LIBS = -L$(LIBDIR) -luforemote
 
 all: C_clean
 
@@ -14,4 +14,7 @@ C_clean:
 	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS)
 
 clean:
-	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rust/target
+	rm -Rf $(SHLIB) $(STATLIB) $(OBJECTS) rust/target	
+
+regenerate: 
+	R --no-echo --no-restore -e "rextendr::document()"
