@@ -8,3 +8,5 @@ crate-type = [ 'staticlib' ]
 
 [dependencies]
 extendr-api = { git = "https://github.com/extendr/extendr", branch = "master" }
+ufo_ipc = { git = "https://github.com/electroCutie/ufo_ipc", branch = "main" }
+
