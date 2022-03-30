@@ -1,12 +1,19 @@
 [package]
-name = 'uforemote'
-version = '0.2.0'
+name = 'ufosandbox'
+version = '0.1.0'
 edition = '2018'
 
 [lib]
 crate-type = [ 'staticlib' ]
 
 [dependencies]
-extendr-api = { git = "https://github.com/extendr/extendr", branch = "master" }
-ufo_ipc = { git = "https://github.com/electroCutie/ufo_ipc", branch = "main" }
 
+libc = "0.2"
+# lazy = "0.5.3"
+libR-sys = "0.2"
+
+extendr-api = { git = "https://github.com/extendr/extendr", branch = "master" }
+
+ufo_core = { git = "https://github.com/ufo-org/ufo-core", branch = "main" }
+ufo_ipc = { git = "https://github.com/ufo-org/ufo_ipc", branch = "main" }
+ufo = { path = "../../../ufo-rust" } # { git = "https://github.com/ufo-org/ufo-rust", branch = "main" }

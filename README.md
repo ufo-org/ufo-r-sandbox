@@ -1,13 +1,12 @@
-# UFO R Remote
+# UFO R Sandbox
 
-This is a package that listens for requests to execute code by other 
-processes. The code is transferred via a socket in the form of serialized 
-byte-code compiled functions. The client deserializes the function, executes 
-it, and passes back the result.
+This is a package that allows creation of custom UFOs with R code in their
+populate and writeback functions. It executes that code in a sandbox R process
+(hence the name). The sandbox is implemented by ufo-r-remote.
 
 ### Notes
 
-* Entry function that starts the entire "server" loop, e.g. `uforemote::serve`.
+* Entry function that starts the entire "server" loop, e.g. `ufosandbox::serve`.
   This sets up and calls a Rust function that starts waiting for incoming
   communication.
 * 
@@ -24,12 +23,12 @@ rustup target add i686-pc-windows-gnu
 
 Once Rust is working, you can install this package via:
 ```r
-remotes::install_github("ufo-org/ufo-r-remote")
+remotes::install_github("ufo-org/ufo-r-sandbox")
 ```
 
 <!-- After installation, the following should work:
 ```r
-library(uforemote)
+library(ufosandbox)
 
 hello_world()
 #> [1] "Hello world!"

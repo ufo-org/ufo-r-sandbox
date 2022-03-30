@@ -1,4 +1,4 @@
 library(testthat)
-library(uforemote)
+library(ufosandbox)
 
-test_check("uforemote")
+test_check("ufosandbox")

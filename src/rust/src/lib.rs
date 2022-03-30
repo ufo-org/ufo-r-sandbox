@@ -1,14 +1,34 @@
-mod rserialization;
-mod server;
+// mod rserialization;
+// mod server;
 
 use extendr_api::prelude::*;
 
-use server::Server;
+use extendr_api::rtype_to_sxp;
+use libR_sys::R_allocator;
+use libR_sys::R_allocator_t;
+use libc::c_void;
+
+use ufo::*;
+use ufo_core::UfoObjectParams;
+
+// use server::Server;
 use ufo_ipc;
 use ufo_ipc::ProtocolCommand;
 use ufo_ipc::FunctionToken;
 
 use std::collections::HashMap;
+use std::sync::Arc;
+// use std::lazy::Lazy;
+
+use libR_sys;
+
+use libc;
+
+
+// static UFO_CORE: Lazy<Vec<i32>> = Lazy::new(|| {
+//     Vec::new()
+// });
+
 
 #[macro_export]
 macro_rules! r_error {
@@ -28,172 +48,106 @@ macro_rules! r_err {
 macro_rules! r_bail {
     ($($s:expr),+) => {
         return Err(r_error!($($s,)+))
+    };    
+}
+
+pub struct UfoDefinition {
+    core: Arc<UfoCore>,
+    vector_type: Rtype,
+    length: usize,
+    element_size: usize,
+}
+
+impl UfoDefinition {
+    pub fn prototype(&self) -> UfoObjectParams {
+        todo!()
+    }
+}
+
+// typedef void *(*custom_alloc_t)(R_allocator_t *allocator, size_t);
+// typedef void  (*custom_free_t)(R_allocator_t *allocator, void *);
+// extern "C" {
+//     type FuckAlloc = u32;
+//     type FuckFree = u32;
+// }
+
+type MemAlloc = extern fn(*mut FuckAllocator, libc::size_t) -> *mut libc::c_void;
+type MemFree = extern fn(*mut FuckAllocator, *mut libc::c_void);
+
+#[repr(C)]
+struct FuckAllocator {
+    mem_alloc: MemAlloc,
+    mem_free: MemFree,
+    res: *mut libc::c_void,
+    data: *mut libc::c_void,
+}
+
+impl From<UfoDefinition> for FuckAllocator {
+    fn from(definition: UfoDefinition) -> Self {
+        FuckAllocator {
+            mem_alloc: ufo_alloc,
+            mem_free: ufo_free,
+            res: std::ptr::null_mut(),
+            data: Box::into_raw(Box::new(definition)).cast(),
+        }
+    }
+}
+
+macro_rules!  try_or_null {
+    ($stuff:expr) => {
+        match ($stuff) {
+            Err(e) => {
+                eprintln!("Ufo error: {}", e);
+                return std::ptr::null_mut();
+            }
+            Ok(result) => result
+        }
     };
 }
 
-
-// impl Function {
-//     pub fn new(function: Robj, data_token: DataToken) -> Self {
-//         Function()
-//     }
-//     pub fn r_deserialize_from(
-//         serialized_function: &[u8],
-//         serialized_user_data: &[u8],
-//     ) -> Result<Self> {
-//         let executable: Robj = serialized_function.r_deserialize(Rtype::Function)?;
-//         // let user_data = serialized_user_data.r_deserialize(Rtype::Language)?;
-//         Ok(Function(executable))
-//     }
-//     pub fn r_call(&self, arguments: Robj) -> Result<Robj> {
-//         assert!(
-//             arguments.rtype() == Rtype::Language,
-//             "Cannot call function: arguments have to be a Language object"
-//         );
-//         let combined_arguments = pairlist!(&self.user_data, arguments);
-//         self.executable.call(combined_arguments)
-//     }
-// }
-
-// fn register_function(
-//     functions: &mut HashMap<FunctionToken, Function>,
-//     id: FunctionToken,
-//     serialized_function: &[u8],
-//     serialized_user_data: &[u8],
-// ) -> Result<()> {
-//     let id = id.into();
-//     if functions.contains_key(&id) {
-//         r_bail!("Cannot register function {:?}: already exists", id);
-//     }
-
-//     let function = Function::r_deserialize_from(serialized_function, serialized_user_data)?;
-//     functions.insert(id, function);
-
-//     Ok(())
-// }
-
-// fn unregister_function(
-//     functions: &mut HashMap<FunctionToken, Function>,
-//     id: FunctionToken,
-// ) -> Result<Robj> {
-
-// }
-
-// fn call_function(
-//     functions: &HashMap<FunctionToken, Function>,
-//     id: FunctionToken,
-//     serialized_arguments: Vec<u8>,
-// ) -> Result<Robj> {
-//     let argument_list = serialized_arguments.r_deserialize(Rtype::Language)?;
-
-//     let function = functions
-//         .get(&id)
-//         .ok_or_else(|| r_error!("Cannot call function {:?}: not registered", id))?;
-
-//     function.r_call(argument_list)
-// }
-
-
-
-/// Start the remote execution server
-/// @export
-#[extendr]
-fn start() -> Result<()> {
-    Server::new().listen()
-}
-    // let mut functions: HashMap<FunctionToken, Function> = HashMap::new();
-    // let mut user_objects: HashMap<DataToken, UserData> = HashMap::new();
-
-    // let mut server = ufo_ipc::subordinate_begin().unwrap(); // TODO return Result<()>?
-    // loop {
-    //     let request = server.recv_command().unwrap();    // TODO error handling    
-
-    //     match &request.command {            
-    //         ProtocolCommand::Define { token, function_blob, associated_data } => {
-    //             if associated_data.len() != 1 {
-    //                 r_bail!("Cannot register function {:?}: \
-    //                          excepting 1 item of associated data, found: {}",
-    //                          token, associated_data.len());
-    //             }
-    //             let associated_datum = associated_data.into_iter().next().unwrap();
-    //             let user_data = associated_datum.expect_bytes_into().unwrap(); // TODO error handling
-
-    //             register_function(&mut functions, token, function_blob, user_data).unwrap();
-
-    //             // TODO reply
-    //             server.respond_to_define(todo!()).unwrap() // TODO error handling
-    //         },
-    //         ProtocolCommand::Call { token, args } => {
-    //             if args.len() != 1 {
-    //                 r_bail!("Cannot register function {:?}: \
-    //                          excepting 1 item of associated data, found: {}",
-    //                          token, args.len());
-    //             }
-    //             let associated_datum = args.into_iter().next().unwrap();
-    //             let argument_list = associated_datum.expect_bytes_into().unwrap(); // TODO error handling
-
-    //             let result = call_function(&functions, token, argument_list)?;
-
-    //             // TODO reply
-    //             server.respond_to_call(todo!(), todo!()).unwrap() // TODO error handling
-    //         },
-    //         ProtocolCommand::Free(token) => {
-                
-    //         },
-    //         ProtocolCommand::Peek(key) => (),
-    //         ProtocolCommand::Poke { key: _, value } => {
-
-    //         },
-    //         ProtocolCommand::Shutdown => (),
-    //     }
-
-    //     // receive message
-    //     // decode message
-    //     // demux to processor functions
-    // }
-
-/// Start listening to remote execution requests
-/// @export
-#[extendr]
-fn listen(port: &str) {
-    println!("Listening...");
+extern fn ufo_alloc(allocator: *mut FuckAllocator, size: libc::size_t) -> *mut libc::c_void {
+    let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };    
+    let ufo = try_or_null!(definition.core.new_ufo(definition.prototype()));
+    try_or_null!(ufo.header_ptr())
 }
 
-/// Execute
-/// @export
-#[extendr]
-fn execute(serialized_function: &[u8]) -> Robj {
-    let function = call!("unserialize", serialized_function).unwrap();
-    function.call(pairlist!(42)).unwrap()
+extern fn ufo_free(allocator: *mut FuckAllocator, object: *mut libc::c_void) {
+    let definition: *mut UfoDefinition = unsafe { (*allocator).data.cast() };
 }
 
-// fun <- function(x) x + 1
-// compiled_fun <- compiler::cmpfun(fun)
-// serialized_fun <- serialize(compiled_fun, connection=NULL)
-// uforemote::execute(serialized_fun)
+fn construct_ufo(definition: UfoDefinition) -> Robj {
+    let sexp_type = todo!(); //rtype_to_sxp(definition.vector_type) as u32; //rtype_as_sexptype(definition.vector_type);
+    let sexp_length = todo!(); //definition.length as isize;
+
+    let allocator = Box::into_raw(Box::new(FuckAllocator::from(definition)));
+    let allocator: *mut R_allocator = allocator.cast();    
+    
+    unsafe {
+        single_threaded(|| {
+            Robj::from_sexp(libR_sys::Rf_allocVector3(sexp_type, sexp_length, allocator))
+        })
+    }
+}
+
+/// Create new UFO with custom populate and writeback functions
+/// @export
+#[extendr]
+fn ufo_new(populate: Robj, writeback: Robj, finalizer: Robj) -> Robj {
+    assert_eq!(populate.rtype(), Rtype::Function, "Expecting populate to be a function, but it is {:?}", populate.rtype());
+    assert_eq!(writeback.rtype(), Rtype::Function, "Expecting populate to be a function, but it is {:?}", populate.rtype());
+
+    // let function = call!("unserialize", serialized_function).unwrap();
+    // function.call(pairlist!(42)).unwrap()
+
+    let definition = todo!();
+
+    construct_ufo(definition)    
+}
 
 // Macro to generate exports.
 // This ensures exported functions are registered with R.
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
-    mod uforemote;
-    fn start;
-    fn listen;
-    fn execute;
+    mod ufosandbox;
+    fn ufo_new;
 }
-
-//     let expr = R!(function(a = 1, b) {c <- a + b}).unwrap();
-//     let func = expr.as_func().unwrap();
-//
-//     let expected_formals = Pairlist {
-//         names_and_values: vec![("a", r!(1.0)), ("b", missing_arg())] };
-//     let expected_body = lang!(
-//         "{", lang!("<-", sym!(c), lang!("+", sym!(a), sym!(b))));
-//     assert_eq!(func.formals.as_pairlist().unwrap(), expected_formals);
-//     assert_eq!(func.body, expected_body);
-//     assert_eq!(func.env, global_env());
-
-// fn fuck(code: Robj) -> Robj {
-
-//     assert!(code.rtype() == RType::Function);
-//     R!("{{code}}(42)")
-// }

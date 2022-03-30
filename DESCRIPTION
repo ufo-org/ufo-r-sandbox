@@ -1,4 +1,4 @@
-Package: uforemote
+Package: ufosandbox
 Title: 
   A remote client for function migration and execution in separate processes
 Version: 0.1.0
@@ -9,16 +9,22 @@ Authors@R: c(person(given = "Colette", family = "Kerr", role = c("aut"),
                     email = "siekkonr@fit.cvut.cz"))
 Maintainer: Konrad Siek <siekkonr@fit.cvut.cz>
 Description:
-  This is a package that listens for requests to execute code by other 
-  processes. The code is transferred via a socket in the form of serialized 
-  byte-code compiled functions. The client deserializes the function, executes 
-  it, and passes back the result.
+  This is an full R frontend for creating lazily populated larger-than-memory R
+  objects. When an object is created, it is empty, and its contents are loaded
+  into memory when it is interacted with. This causes a custom R function to be
+  executed to generate the data needed to populate it. The populate functions
+  execute in a separate sanbox R process.
 License: GPL-2 | GPL-3
-SystemRequirements: Rust tool chain w/ cargo, libclang/llvm-config, userfaultfd
+SystemRequirements: Rust tool chain w/ cargo, userfaultfd
 Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.2
+Imports: 
+    rextendr
+LinkingTo:
+    rextendr
 Suggests:
     rmarkdown,
-    testthat
+    testthat,
+    ufovectors
