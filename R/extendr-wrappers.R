@@ -10,19 +10,5 @@ NULL
 
 #' Create new UFO with custom populate and writeback functions
 #' @export
-ufo_new <- function(populate, writeback, finalizer) .Call(wrap__ufo_new, populate, writeback, finalizer)
-
-Person <- new.env(parent = emptyenv())
-
-Person$new <- function() .Call(wrap__Person__new)
-
-Person$set_name <- function(name) invisible(.Call(wrap__Person__set_name, self, name))
-
-Person$name <- function() .Call(wrap__Person__name, self)
-
-#' @export
-`$.Person` <- function (self, name) { func <- Person[[name]]; environment(func) <- environment(); func }
-
-#' @export
-`[[.Person` <- `$.Person`
+`_new` <- function(mode, length, populate, writeback, finalizer, read_only, chunk_length) .Call(wrap___new, mode, length, populate, writeback, finalizer, read_only, chunk_length)
 
