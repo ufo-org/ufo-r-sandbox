@@ -4,12 +4,12 @@
 use extendr_api::prelude::*;
 use extendr_api::rtype_to_sxp;
 
-use libc::NTF_SELF;
 use libc::c_void;
+use ufo_core::UfoCoreConfig;
+// use ufo_core::UfoCore;
 use core::mem::size_of;
-use std::ops::Add;
 
-use ufo::*;
+use ufo_core::UfoCore;
 use ufo_core::UfoObjectParams;
 
 // use server::Server;
@@ -30,6 +30,14 @@ use libc;
 //     Vec::new()
 // });
 
+macro_rules! r_or_bail {
+    ($task:expr, $($s:expr),*$(,)?) => {
+        match $task {
+            Ok(ok) => ok,
+            Err(error) => r_bail!("{}: {}", format!($($s,)+), error),
+        }
+    }
+}
 
 #[macro_export]
 macro_rules! r_error {
@@ -143,8 +151,51 @@ impl Sandbox {
     pub fn register_finalizer_function() {}
 }
 
+#[derive(Clone)]
+pub struct UfoSystem {
+    core: Arc<UfoCore>
+}
+
+impl std::fmt::Debug for UfoSystem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UfoSystem").field("core", &"...").finish()
+    }
+}
+
+impl UfoSystem {
+    pub fn new(path: impl Into<String>, high_watermark: usize, low_watermark: usize) -> Result<Self> {
+        let config = UfoCoreConfig {
+            writeback_temp_path: path.into(),
+            high_watermark,
+            low_watermark,
+        };
+        let core = r_or_bail!(UfoCore::new(config), "Cannot start UFO core");
+        Ok(UfoSystem{ core })
+    }
+
+    pub fn shutdown(self) {
+        self.core.shutdown()
+    }
+
+    pub fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
+        let config = prototype.new_config();
+        let ufo = r_or_bail!(self.core.allocate_ufo(config), "Error constructing UFO");
+        let locked_ufo = r_or_bail!(ufo.read(), "Error dereferencing newly created UFO");
+        let ufo_pointer = locked_ufo.header_ptr();
+        Ok(ufo_pointer)
+    }
+
+    pub fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
+        let ufo = r_or_bail!(self.core.get_ufo_by_address(pointer as usize), "Error freeing UFO");
+        let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
+        let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
+        Ok(wait_group.wait())
+    }
+}
+
+
 pub struct UfoDefinition {
-    core: Arc<UfoCore>,
+    system: Arc<UfoSystem>,
     vector_type: Rtype,
     length: usize,              // in #elements
     chunk_length: Option<usize>,  // in B
@@ -214,7 +265,18 @@ impl From<UfoDefinition> for CustomAllocator {
     }
 }
 
-macro_rules!  try_or_null {
+macro_rules! try_or_yell_impotently {
+    ($stuff:expr) => {
+        match ($stuff) {
+            Err(e) => {
+                eprintln!("Ufo error: {}", e);
+            }
+            Ok(_) => ()
+        }
+    };
+}
+
+macro_rules! try_or_null {
     ($stuff:expr) => {
         match ($stuff) {
             Err(e) => {
@@ -229,12 +291,12 @@ macro_rules!  try_or_null {
 extern fn ufo_alloc(allocator: *mut CustomAllocator, size: libc::size_t) -> *mut libc::c_void {
     let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };    
     let prototype = try_or_null!(definition.prototype());
-    let ufo = try_or_null!(definition.core.new_ufo(prototype));
-    try_or_null!(ufo.header_ptr())
+    try_or_null!(definition.system.create_ufo(prototype))    
 }
 
-extern fn ufo_free(allocator: *mut CustomAllocator, object: *mut libc::c_void) {
-    let definition: *mut UfoDefinition = unsafe { (*allocator).data.cast() };
+extern fn ufo_free(allocator: *mut CustomAllocator, pointer: *mut libc::c_void) {
+    let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };
+    try_or_yell_impotently!(definition.system.free_ufo(pointer))
 }
 
 // pub fn sandboxed_ufo(vector_type: Rtype, length: usize, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: Option<usize>) -> Result<Robj> {
@@ -244,7 +306,7 @@ extern fn ufo_free(allocator: *mut CustomAllocator, object: *mut libc::c_void) {
 /// Create new UFO with custom populate and writeback functions
 /// @export
 #[extendr]
-fn _new(mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
+pub fn new(mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
     r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
     r_bail_if!(length == 0 => "Cannot create an empty UFO");
     r_bail_if!(length == 1 => "Cannot create a scalar UFO");
@@ -270,12 +332,14 @@ fn _new(mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Rob
         other => r_bail!("Cannot create a UFO with mode: {}", other),
     };
 
-    let core = r!("rlang::pkg_env(\"ufosandbox\")$.ufo_core");
+    let external_pointer: Robj = r!("rlang::pkg_env(\"ufosandbox\")$.ufo_core");    
+    let system = unsafe {
+        let ptr = libR_sys::R_ExternalPtrAddr(external_pointer.get()) as *const UfoSystem;
+        &*ptr as &UfoSystem
+    };
 
-    // let function = call!("unserialize", serialized_function).unwrap();
-    // function.call(pairlist!(42)).unwrap()
     let ufo = UfoDefinition { 
-        core, 
+        system: todo!(), 
         vector_type,
         length, 
         chunk_length, 
@@ -286,9 +350,55 @@ fn _new(mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Rob
     // sandboxed_ufo(vector_type, length as usize, populate, writeback, finalizer, read_only, chunk_length)
 }
 
+// Robj::make_external_ptr(Box::into_raw(boxed), r!(type_name), r!(()));
+
 #[extendr]
-fn _ufo_initialize(high_watermark: i64, low_watermark: i64) -> Robj {
-    r!("NULL")
+pub fn system_initialize(high_watermark: i64, low_watermark: i64) -> Result<Robj> {
+
+    r_bail_if!(high_watermark <= 0 => 
+               "High watermark must be greater than zero (provided value:  {})", 
+               high_watermark);
+
+    r_bail_if!(low_watermark <= 0 => 
+               "Low watermark must be greater than zero (provided value:  {})", 
+               low_watermark);
+
+    r_bail_if!(low_watermark >= high_watermark => 
+              "High watermark must be greater than low watermark (currently low={} vs. high={})", 
+              low_watermark, high_watermark);
+
+    let system = r_or_bail!(
+        UfoSystem::new("/tmp", high_watermark as usize, low_watermark as usize), 
+        "Cannot start UFO system"
+    );
+
+    Ok(ExternalPtr::new(system).into())
+}
+
+pub fn system_finalize() {
+    // Grab UfoCore from R
+    // Extract from global variable wrapper
+    // ufo_core.shutdown
+}
+
+struct Person {
+    pub name: String,
+    pub core: Robj,
+}
+
+#[extendr]
+impl Person {
+    fn new() -> Self {
+        Self { name: "".to_string(), core: ExternalPtr::new("".to_string()).into() }
+    }
+
+    fn set_name(&mut self, name: &str) {
+        self.name = name.to_string();
+    }
+
+    fn name(&self) -> &str {
+        self.name.as_str()
+    }
 }
 
 // Macro to generate exports.
@@ -296,8 +406,10 @@ fn _ufo_initialize(high_watermark: i64, low_watermark: i64) -> Robj {
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod ufosandbox;
-    fn _new;
-    fn _ufo_initialize;
+    fn new;
+    fn system_initialize;
+    // fn _ufo_finalize;
+    impl Person;
 }
 
 /*

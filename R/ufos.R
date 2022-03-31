@@ -1,7 +1,8 @@
 .initialize <- function(...) {
   high_water_mark_mb = as.integer(getOption("ufos.high_water_mark_mb", default=2048))
   low_water_mark_mb = as.integer(getOption("ufos.low_water_mark_mb", default=1024))
-  invisible(rlang::pkg_env("ufosandbox")$.ufo_core <- .Call("ufo_initialize", high_water_mark_mb, low_water_mark_mb))  
+  #invisible(rlang::pkg_env("ufosandbox")$.ufo_core <- .Call("ufo_initialize", high_water_mark_mb, low_water_mark_mb))  
+  NULL
 }
 
 # Kills the UFO framework.
