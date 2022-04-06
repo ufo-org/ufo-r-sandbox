@@ -8,23 +8,17 @@
 #' @useDynLib ufosandbox, .registration = TRUE
 NULL
 
-#' Create new UFO with custom populate and writeback functions
-#' @export
-new <- function(mode, length, populate, writeback, finalizer, read_only, chunk_length) .Call(wrap__new, mode, length, populate, writeback, finalizer, read_only, chunk_length)
+UfoSystem <- new.env(parent = emptyenv())
 
-system_initialize <- function(high_watermark, low_watermark) .Call(wrap__system_initialize, high_watermark, low_watermark)
+UfoSystem$initialize <- function(writeback_path, high_watermark, low_watermark) .Call(wrap__UfoSystem__initialize, writeback_path, high_watermark, low_watermark)
 
-Person <- new.env(parent = emptyenv())
+UfoSystem$shutdown <- function() invisible(.Call(wrap__UfoSystem__shutdown, self))
 
-Person$new <- function() .Call(wrap__Person__new)
-
-Person$set_name <- function(name) invisible(.Call(wrap__Person__set_name, self, name))
-
-Person$name <- function() .Call(wrap__Person__name, self)
+UfoSystem$new_ufo <- function(mode, length, populate, writeback, finalizer, read_only, chunk_length) .Call(wrap__UfoSystem__new_ufo, self, mode, length, populate, writeback, finalizer, read_only, chunk_length)
 
 #' @export
-`$.Person` <- function (self, name) { func <- Person[[name]]; environment(func) <- environment(); func }
+`$.UfoSystem` <- function (self, name) { func <- UfoSystem[[name]]; environment(func) <- environment(); func }
 
 #' @export
-`[[.Person` <- `$.Person`
+`[[.UfoSystem` <- `$.UfoSystem`
 

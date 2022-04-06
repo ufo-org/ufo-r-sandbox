@@ -1,35 +1,34 @@
-// mod rserialization;
-// mod server;
+pub mod serder;
+pub mod typer;
+pub mod allocr;
+pub mod sandbox;
 
 use extendr_api::prelude::*;
-use extendr_api::rtype_to_sxp;
 
 use libc::c_void;
 use ufo_core::UfoCoreConfig;
-// use ufo_core::UfoCore;
 use core::mem::size_of;
+use std::path::PathBuf;
 
 use ufo_core::UfoCore;
 use ufo_core::UfoObjectParams;
 
-// use server::Server;
-use ufo_ipc;
-use ufo_ipc::ProtocolCommand;
-use ufo_ipc::FunctionToken;
+// use ufo_ipc;
+// use ufo_ipc::ProtocolCommand;
+// use ufo_ipc::FunctionToken;
 
-use std::collections::HashMap;
 use std::sync::Arc;
-// use std::lazy::Lazy;
 
 use libR_sys;
 
 use libc;
 
+use allocr::*;
+use typer::*;
+use serder::*;
+use sandbox::*;
 
-// static UFO_CORE: Lazy<Vec<i32>> = Lazy::new(|| {
-//     Vec::new()
-// });
-
+#[macro_export]
 macro_rules! r_or_bail {
     ($task:expr, $($s:expr),*$(,)?) => {
         match $task {
@@ -69,91 +68,15 @@ macro_rules! r_bail_if {
     };    
 }
 
-trait RtypeTools: Sized {
-    fn copy(&self) -> Self;
-    fn is_vector(&self) -> bool;
-    fn as_sxp(&self) -> i32;
-    fn element_size(&self) -> Option<usize>;
-    // fn from_mode(mode: &str) -> Option<Self>;
-}
-
-impl RtypeTools for Rtype {
-    fn copy(&self) -> Self {
-        match self {
-            Rtype::Null => Rtype::Null,
-            Rtype::Symbol => Rtype::Symbol,
-            Rtype::Pairlist => Rtype::Pairlist,
-            Rtype::Function => Rtype::Function,
-            Rtype::Environment => Rtype::Environment,
-            Rtype::Promise => Rtype::Promise,
-            Rtype::Language => Rtype::Language,
-            Rtype::Special => Rtype::Special,
-            Rtype::Builtin => Rtype::Builtin,
-            Rtype::Rstr => Rtype::Rstr,
-            Rtype::Logicals => Rtype::Logicals,
-            Rtype::Integers => Rtype::Integers,
-            Rtype::Doubles => Rtype::Doubles,
-            Rtype::Complexes => Rtype::Complexes,
-            Rtype::Strings => Rtype::Strings,
-            Rtype::Dot => Rtype::Dot,
-            Rtype::Any => Rtype::Any,
-            Rtype::List => Rtype::List,
-            Rtype::Expressions => Rtype::Expressions,
-            Rtype::Bytecode => Rtype::Bytecode,
-            Rtype::ExternalPtr => Rtype::ExternalPtr,
-            Rtype::WeakRef => Rtype::WeakRef,
-            Rtype::Raw => Rtype::Raw,
-            Rtype::S4 => Rtype::S4,
-            Rtype::Unknown => Rtype::Unknown,
-        }
-    }
-
-    fn is_vector(&self) -> bool {
-        match self {
-            Rtype::Rstr => true,
-            Rtype::Logicals => true,
-            Rtype::Integers => true,
-            Rtype::Doubles => true,
-            Rtype::Complexes => true,
-            Rtype::Strings => true,
-            Rtype::List => true,
-            Rtype::Raw => true,
-            _ => false,
-        }
-    }
-
-    fn as_sxp(&self) -> i32 {
-        rtype_to_sxp(self.copy())
-    }
-
-    fn element_size(&self) -> Option<usize> {
-        match self {
-            Rtype::Rstr => Some(size_of::<libR_sys::Rbyte>()),
-            Rtype::Logicals => Some(size_of::<libR_sys::Rboolean>()),
-            Rtype::Integers => Some(size_of::<i32>()),
-            Rtype::Doubles => Some(size_of::<f64>()),
-            Rtype::Complexes => Some(size_of::<libR_sys::Rcomplex>()),
-            Rtype::Strings => Some(size_of::<libR_sys::SEXP>()),
-            Rtype::List => Some(size_of::<libR_sys::SEXP>()),
-            Rtype::Raw => Some(size_of::<libR_sys::Rbyte>()),
-            _ => None,
-        }
-    }       
-}
-
-pub struct Sandbox {
-
-}
-
-impl Sandbox {
-    pub fn register_populate_function() {}
-    pub fn register_writeback_function() {}
-    pub fn register_finalizer_function() {}
-}
-
 #[derive(Clone)]
 pub struct UfoSystem {
-    core: Arc<UfoCore>
+    core: Arc<UfoCore>,
+    sandbox: Arc<Sandbox>,
+}
+
+trait RUnfriendlyAPI: Sized {
+    fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void>;
+    fn free_ufo(&self, pointer: *mut c_void) -> Result<()>;
 }
 
 impl std::fmt::Debug for UfoSystem {
@@ -162,22 +85,8 @@ impl std::fmt::Debug for UfoSystem {
     }
 }
 
-impl UfoSystem {
-    pub fn new(path: impl Into<String>, high_watermark: usize, low_watermark: usize) -> Result<Self> {
-        let config = UfoCoreConfig {
-            writeback_temp_path: path.into(),
-            high_watermark,
-            low_watermark,
-        };
-        let core = r_or_bail!(UfoCore::new(config), "Cannot start UFO core");
-        Ok(UfoSystem{ core })
-    }
-
-    pub fn shutdown(self) {
-        self.core.shutdown()
-    }
-
-    pub fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
+impl RUnfriendlyAPI for UfoSystem {
+    fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
         let config = prototype.new_config();
         let ufo = r_or_bail!(self.core.allocate_ufo(config), "Error constructing UFO");
         let locked_ufo = r_or_bail!(ufo.read(), "Error dereferencing newly created UFO");
@@ -185,7 +94,7 @@ impl UfoSystem {
         Ok(ufo_pointer)
     }
 
-    pub fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
+    fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
         let ufo = r_or_bail!(self.core.get_ufo_by_address(pointer as usize), "Error freeing UFO");
         let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
         let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
@@ -193,13 +102,133 @@ impl UfoSystem {
     }
 }
 
+#[extendr]
+impl UfoSystem {
+    pub fn initialize(writeback_path: String, high_watermark: i64, low_watermark: i64) -> Result<Self> {
+
+        println!("Ufo core is initializing...");
+
+        let directory = PathBuf::from(writeback_path.as_str());
+        r_bail_if!(!directory.exists() =>
+                   "Specified writeback path {} does not exist", 
+                   writeback_path);
+
+        r_bail_if!(!directory.is_dir() =>
+                   "Specified writeback path {} is not a directory", 
+                   writeback_path);                   
+
+        let meta = r_or_bail!(std::fs::metadata(directory), 
+                    "Cannot access permissions for writeback path {}", 
+                    writeback_path);
+
+        r_bail_if!(meta.permissions().readonly() =>
+                   "Specified writeback path {} is not writeable", 
+                   writeback_path);
+
+        r_bail_if!(high_watermark <= 0 => 
+                   "High watermark must be greater than zero (provided value: {})", 
+                   high_watermark);
+    
+        r_bail_if!(low_watermark <= 0 => 
+                   "Low watermark must be greater than zero (provided value: {})", 
+                   low_watermark);
+    
+        r_bail_if!(low_watermark >= high_watermark => 
+                  "High watermark must be greater than low watermark (currently low={} vs. high={})", 
+                  low_watermark, high_watermark);
+
+        let config = UfoCoreConfig {
+            writeback_temp_path: writeback_path,
+            high_watermark: high_watermark as usize, 
+            low_watermark: low_watermark as usize,
+        };
+
+        let sandbox = Sandbox::new();
+
+        Ok(UfoSystem{ 
+            core: r_or_bail!(UfoCore::new(config), "Cannot start UFO core system"),
+            sandbox: Arc::new(sandbox),
+        })
+    }
+
+    pub fn shutdown(&self) {
+        eprintln!("Ufo core is shutting down...");
+        self.core.shutdown()
+    }
+
+    pub fn new_ufo(&self, mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
+        r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
+        r_bail_if!(length == 0 => "Cannot create an empty UFO");
+        r_bail_if!(length == 1 => "Cannot create a scalar UFO");
+        let length = length as usize;
+    
+        r_bail_if!(populate.rtype() != Rtype::Function => 
+                   "Expecting populate to be a function, but it is {:?}", populate.rtype());
+        let populate = populate.as_function().unwrap();
+
+        r_bail_if!(writeback.rtype() != Rtype::Function && writeback.rtype() != Rtype::Null => 
+                   "Expecting writeback to be a function or NULL, but it is {:?}", writeback.rtype());
+        let writeback = writeback.as_function();
+
+        r_bail_if!(finalizer.rtype() != Rtype::Function && finalizer.rtype() != Rtype::Null => 
+                   "Expecting finalizer to be a function or NULL, but it is {:?}", finalizer.rtype());
+        let finalizer = finalizer.as_function();
+    
+        let chunk_length = if chunk_length <= 0 { None } else { Some(chunk_length as usize) };
+    
+        let vector_type = match mode.to_lowercase().as_str() {
+            "vector" => Rtype::List,
+            "numeric" | "double" => Rtype::Doubles,
+            "integer" => Rtype::Integers,
+            "logical" => Rtype::Logicals,
+            "character" => Rtype::Strings,
+            "complex" => Rtype::Complexes,
+            "raw" => Rtype::Raw,
+            other => r_bail!("Cannot create a UFO with mode: {}", other),
+        };        
+
+        let populate_token = 
+            self.sandbox.register_function(populate.serialize()?)?;
+
+        let writeback_token = if let Some(writeback) = writeback {
+            Some(self.sandbox.register_function(writeback.serialize()?)?)
+        } else {
+            None
+        };
+
+        let finalizer_token = if let Some(finalizer) = finalizer {
+            Some(self.sandbox.register_function(finalizer.serialize()?)?)
+        } else {
+            None
+        };
+       
+        let ufo = UfoDefinition { 
+            system: self.clone(), // Cloning just involves copying a reference via an arc wrapped in UfoSystem.
+            vector_type,
+            length, 
+            chunk_length, 
+            read_only,
+            requested_size: None,
+            populate: populate_token,
+            writeback: writeback_token,
+            finalizer: finalizer_token,            
+        }.construct_robj();
+    
+        Ok(ufo)
+    }
+}
 
 pub struct UfoDefinition {
-    system: Arc<UfoSystem>,
+    system: UfoSystem,
     vector_type: Rtype,
-    length: usize,              // in #elements
-    chunk_length: Option<usize>,  // in B
+    length: usize,                 // in #elements
+    chunk_length: Option<usize>,   // in B
     read_only: bool,
+    requested_size: Option<usize>, // in B - the exact amount of B R is asking for, filled in upon request
+    populate: FunctionToken,
+    writeback: Option<FunctionToken>,
+    finalizer: Option<FunctionToken>,
+    // sandbox_data: DataToken,
 }
 
 impl UfoDefinition {
@@ -240,165 +269,6 @@ impl UfoDefinition {
             })
         }
     }
-
-}
-
-type MemAlloc = extern fn(*mut CustomAllocator, libc::size_t) -> *mut libc::c_void;
-type MemFree = extern fn(*mut CustomAllocator, *mut libc::c_void);
-
-#[repr(C)]
-struct CustomAllocator {
-    mem_alloc: MemAlloc,
-    mem_free: MemFree,
-    res: *mut libc::c_void,
-    data: *mut libc::c_void,
-}
-
-impl From<UfoDefinition> for CustomAllocator {
-    fn from(definition: UfoDefinition) -> Self {
-        CustomAllocator {
-            mem_alloc: ufo_alloc,
-            mem_free: ufo_free,
-            res: std::ptr::null_mut(),
-            data: Box::into_raw(Box::new(definition)).cast(),
-        }
-    }
-}
-
-macro_rules! try_or_yell_impotently {
-    ($stuff:expr) => {
-        match ($stuff) {
-            Err(e) => {
-                eprintln!("Ufo error: {}", e);
-            }
-            Ok(_) => ()
-        }
-    };
-}
-
-macro_rules! try_or_null {
-    ($stuff:expr) => {
-        match ($stuff) {
-            Err(e) => {
-                eprintln!("Ufo error: {}", e);
-                return std::ptr::null_mut();
-            }
-            Ok(result) => result
-        }
-    };
-}
-
-extern fn ufo_alloc(allocator: *mut CustomAllocator, size: libc::size_t) -> *mut libc::c_void {
-    let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };    
-    let prototype = try_or_null!(definition.prototype());
-    try_or_null!(definition.system.create_ufo(prototype))    
-}
-
-extern fn ufo_free(allocator: *mut CustomAllocator, pointer: *mut libc::c_void) {
-    let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };
-    try_or_yell_impotently!(definition.system.free_ufo(pointer))
-}
-
-// pub fn sandboxed_ufo(vector_type: Rtype, length: usize, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: Option<usize>) -> Result<Robj> {
-
-// }
-
-/// Create new UFO with custom populate and writeback functions
-/// @export
-#[extendr]
-pub fn new(mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
-    r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
-    r_bail_if!(length == 0 => "Cannot create an empty UFO");
-    r_bail_if!(length == 1 => "Cannot create a scalar UFO");
-    let length = length as usize;
-
-    r_bail_if!(populate.rtype() != Rtype::Function => 
-               "Expecting populate to be a function, but it is {:?}", populate.rtype());
-    r_bail_if!(writeback.rtype() != Rtype::Function && writeback.rtype() != Rtype::Null => 
-               "Expecting writeback to be a function or NULL, but it is {:?}", writeback.rtype());
-    r_bail_if!(finalizer.rtype() != Rtype::Function && finalizer.rtype() != Rtype::Null => 
-               "Expecting finalizer to be a function or NULL, but it is {:?}", finalizer.rtype());
-
-    let chunk_length = if chunk_length <= 0 { None } else { Some(chunk_length as usize) };
-
-    let vector_type = match mode.to_lowercase().as_str() {
-        "vector" => Rtype::List,
-        "numeric" | "double" => Rtype::Doubles,
-        "integer" => Rtype::Integers,
-        "logical" => Rtype::Logicals,
-        "character" => Rtype::Strings,
-        "complex" => Rtype::Complexes,
-        "raw" => Rtype::Raw,
-        other => r_bail!("Cannot create a UFO with mode: {}", other),
-    };
-
-    let external_pointer: Robj = r!("rlang::pkg_env(\"ufosandbox\")$.ufo_core");    
-    let system = unsafe {
-        let ptr = libR_sys::R_ExternalPtrAddr(external_pointer.get()) as *const UfoSystem;
-        &*ptr as &UfoSystem
-    };
-
-    let ufo = UfoDefinition { 
-        system: todo!(), 
-        vector_type,
-        length, 
-        chunk_length, 
-        read_only,
-    }.construct_robj();
-
-    Ok(ufo)
-    // sandboxed_ufo(vector_type, length as usize, populate, writeback, finalizer, read_only, chunk_length)
-}
-
-// Robj::make_external_ptr(Box::into_raw(boxed), r!(type_name), r!(()));
-
-#[extendr]
-pub fn system_initialize(high_watermark: i64, low_watermark: i64) -> Result<Robj> {
-
-    r_bail_if!(high_watermark <= 0 => 
-               "High watermark must be greater than zero (provided value:  {})", 
-               high_watermark);
-
-    r_bail_if!(low_watermark <= 0 => 
-               "Low watermark must be greater than zero (provided value:  {})", 
-               low_watermark);
-
-    r_bail_if!(low_watermark >= high_watermark => 
-              "High watermark must be greater than low watermark (currently low={} vs. high={})", 
-              low_watermark, high_watermark);
-
-    let system = r_or_bail!(
-        UfoSystem::new("/tmp", high_watermark as usize, low_watermark as usize), 
-        "Cannot start UFO system"
-    );
-
-    Ok(ExternalPtr::new(system).into())
-}
-
-pub fn system_finalize() {
-    // Grab UfoCore from R
-    // Extract from global variable wrapper
-    // ufo_core.shutdown
-}
-
-struct Person {
-    pub name: String,
-    pub core: Robj,
-}
-
-#[extendr]
-impl Person {
-    fn new() -> Self {
-        Self { name: "".to_string(), core: ExternalPtr::new("".to_string()).into() }
-    }
-
-    fn set_name(&mut self, name: &str) {
-        self.name = name.to_string();
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_str()
-    }
 }
 
 // Macro to generate exports.
@@ -406,10 +276,7 @@ impl Person {
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod ufosandbox;
-    fn new;
-    fn system_initialize;
-    // fn _ufo_finalize;
-    impl Person;
+    impl UfoSystem;
 }
 
 /*
