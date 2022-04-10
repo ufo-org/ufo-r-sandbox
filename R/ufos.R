@@ -92,8 +92,9 @@ ufo_vector <- function(mode, length,
                        read_only = FALSE, chunk_length = 0) {
     system <- ufo_system_get_or_create()
     system$new_ufo(mode = mode, length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+                   populate = populate, writeback = writeback,
+                   finalizer = finalizer, read_only = read_only,
+                   chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO integer vector of the given length.
@@ -115,9 +116,10 @@ ufo_vector <- function(mode, length,
 #' @export
 ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "integer", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "integer", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO numeric vector of the given length.
@@ -139,9 +141,10 @@ ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @export
 ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "numeric", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "numeric", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO logical vector of the given length.
@@ -163,9 +166,10 @@ ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @export
 ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "logical", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "logical", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO character vector of the given length.
@@ -187,9 +191,10 @@ ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @export
 ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
                           read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "character", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "character", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO complex vector of the given length.
@@ -211,9 +216,10 @@ ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @export
 ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "complex", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "complex", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
 }
 
 #' Produces a lazily populated UFO raw vector of the given length.
@@ -235,7 +241,13 @@ ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @export
 ufo_raw <- function(length, populate, writeback = NULL, finalizer = NULL,
                     read_only = FALSE, chunk_length = 0) {
-    ufo(mode = "raw", length = length,
-        populate = populate, writeback = writeback, finalizer = finalizer,
-        read_only = read_only, chunk_length = chunk_length)
+    ufo_vector(mode = "raw", length = length,
+               populate = populate, writeback = writeback,
+               finalizer = finalizer, read_only = read_only,
+               chunk_length = chunk_length)
+}
+
+#' Start the sandbox process. (Ordinarily this is done lazily when UFOs are created).
+start_sandbox <- function() {
+
 }

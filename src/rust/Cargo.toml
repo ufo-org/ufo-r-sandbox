@@ -7,7 +7,7 @@ edition = '2018'
 crate-type = [ 'staticlib' ]
 
 [dependencies]
-
+itertools = "0.10"
 libc = "0.2"
 # lazy = "0.5.1"
 libR-sys = "0.2"

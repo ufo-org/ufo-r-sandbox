@@ -2,11 +2,13 @@ pub mod serder;
 pub mod typer;
 pub mod allocr;
 pub mod sandbox;
+mod helpers;
 
 use extendr_api::prelude::*;
 
 use libc::c_void;
 use ufo_core::UfoCoreConfig;
+use ufo_ipc::DataToken;
 use core::mem::size_of;
 use std::path::PathBuf;
 
@@ -27,6 +29,8 @@ use allocr::*;
 use typer::*;
 use serder::*;
 use sandbox::*;
+
+use crate::helpers::*;
 
 #[macro_export]
 macro_rules! r_or_bail {
@@ -71,7 +75,7 @@ macro_rules! r_bail_if {
 #[derive(Clone)]
 pub struct UfoSystem {
     core: Arc<UfoCore>,
-    sandbox: Arc<Sandbox>,
+    sandbox: Sandbox,
 }
 
 trait RUnfriendlyAPI: Sized {
@@ -143,11 +147,9 @@ impl UfoSystem {
             low_watermark: low_watermark as usize,
         };
 
-        let sandbox = Sandbox::new();
-
         Ok(UfoSystem{ 
             core: r_or_bail!(UfoCore::new(config), "Cannot start UFO core system"),
-            sandbox: Arc::new(sandbox),
+            sandbox: Sandbox::start()?,
         })
     }
 
@@ -156,7 +158,8 @@ impl UfoSystem {
         self.core.shutdown()
     }
 
-    pub fn new_ufo(&self, mode: &str, length: i64, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
+    pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
+        
         r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
         r_bail_if!(length == 0 => "Cannot create an empty UFO");
         r_bail_if!(length == 1 => "Cannot create a scalar UFO");
@@ -185,22 +188,28 @@ impl UfoSystem {
             "complex" => Rtype::Complexes,
             "raw" => Rtype::Raw,
             other => r_bail!("Cannot create a UFO with mode: {}", other),
-        };        
+        };
 
+        let serialized_data = user_data.serialize()?;
+        let data_token = self.sandbox.register_data(serialized_data)?;
+        
+        let serialized_populate = populate.serialize()?;
         let populate_token = 
-            self.sandbox.register_function(populate.serialize()?)?;
+            self.sandbox.register_function(serialized_populate, data_token)?;
 
-        let writeback_token = if let Some(writeback) = writeback {
-            Some(self.sandbox.register_function(writeback.serialize()?)?)
-        } else {
-            None
-        };
+        let serialized_writeback = writeback
+            .map(|function| function.serialize())
+            .extract_result()?;
+        let writeback_token = serialized_writeback.map(|serialized_function| {
+                self.sandbox.register_function(serialized_function, data_token)
+            }).extract_result()?;
 
-        let finalizer_token = if let Some(finalizer) = finalizer {
-            Some(self.sandbox.register_function(finalizer.serialize()?)?)
-        } else {
-            None
-        };
+        let serialized_finalizer = finalizer
+            .map(|function| function.serialize())
+            .extract_result()?;
+        let finalizer_token = serialized_finalizer.map(|serialized_function| {
+                self.sandbox.register_function(serialized_function, data_token)
+            }).extract_result()?;
        
         let ufo = UfoDefinition { 
             system: self.clone(), // Cloning just involves copying a reference via an arc wrapped in UfoSystem.
@@ -211,7 +220,8 @@ impl UfoSystem {
             requested_size: None,
             populate: populate_token,
             writeback: writeback_token,
-            finalizer: finalizer_token,            
+            finalizer: finalizer_token,   
+            user_data: data_token,         
         }.construct_robj();
     
         Ok(ufo)
@@ -228,7 +238,7 @@ pub struct UfoDefinition {
     populate: FunctionToken,
     writeback: Option<FunctionToken>,
     finalizer: Option<FunctionToken>,
-    // sandbox_data: DataToken,
+    user_data: DataToken,
 }
 
 impl UfoDefinition {
@@ -236,10 +246,10 @@ impl UfoDefinition {
         r_bail_if!(!self.vector_type.is_vector() => "UFO needs to be a vector type");
 
         let header_size: usize = size_of::<libR_sys::SEXPREC>();
-        r_bail_if!(header_size > 0 => "SEXP header should be non-zero");
+        r_bail_if!(header_size == 0 => "SEXP header should be non-zero");
 
         let allocator_size: usize = size_of::<libR_sys::R_allocator>();
-        r_bail_if!(allocator_size > 0 => "Custom allocator should be non-zero");
+        r_bail_if!(allocator_size == 0 => "Custom allocator should be non-zero");
 
         eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
 
