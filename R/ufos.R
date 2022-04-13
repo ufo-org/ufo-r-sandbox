@@ -246,8 +246,3 @@ ufo_raw <- function(length, populate, writeback = NULL, finalizer = NULL,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
 }
-
-#' Start the sandbox process. (Ordinarily this is done lazily when UFOs are created).
-start_sandbox <- function() {
-
-}

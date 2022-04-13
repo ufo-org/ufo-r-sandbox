@@ -14,7 +14,7 @@ UfoSystem$initialize <- function(writeback_path, high_watermark, low_watermark) 
 
 UfoSystem$shutdown <- function() invisible(.Call(wrap__UfoSystem__shutdown, self))
 
-UfoSystem$new_ufo <- function(mode, length, populate, writeback, finalizer, read_only, chunk_length) .Call(wrap__UfoSystem__new_ufo, self, mode, length, populate, writeback, finalizer, read_only, chunk_length)
+UfoSystem$new_ufo <- function(mode, length, user_data, populate, writeback, finalizer, read_only, chunk_length) .Call(wrap__UfoSystem__new_ufo, self, mode, length, user_data, populate, writeback, finalizer, read_only, chunk_length)
 
 #' @export
 `$.UfoSystem` <- function (self, name) { func <- UfoSystem[[name]]; environment(func) <- environment(); func }

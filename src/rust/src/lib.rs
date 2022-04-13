@@ -8,7 +8,11 @@ use extendr_api::prelude::*;
 
 use libc::c_void;
 use ufo_core::UfoCoreConfig;
+use ufo_core::UfoPopulateError;
+use ufo_core::UfoPopulateFn;
+use ufo_core::UfoWriteListenerEvent;
 use ufo_ipc::DataToken;
+use ufo_ipc::GenericValue;
 use core::mem::size_of;
 use std::path::PathBuf;
 
@@ -228,6 +232,55 @@ impl UfoSystem {
     }
 }
 
+impl UfoSystem {
+    pub fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
+        let result = self.sandbox
+            .call_function(token, &[GenericValue::Vusize(start), GenericValue::Vusize(end)])
+            .map_err(|e| {
+                eprintln!("UFO populate error: {}", e);
+                UfoPopulateError
+            })?;
+        unsafe {
+            std::ptr::copy_nonoverlapping(result.as_ptr(), memory, result.len());
+        }
+        Ok(())
+    }
+
+    pub fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
+        let data = GenericValue::Vbytes(unsafe {
+            std::slice::from_raw_parts(memory, end - start)
+        });
+        let start = GenericValue::Vusize(start);
+        let end = GenericValue::Vusize(end);
+        let event_type = GenericValue::Vstring("writeback");
+
+        let result = self.sandbox
+            .call_procedure(token, &[event_type, start, end, data]);
+
+        if let Err(e) = result {
+            eprintln!("UFO writeback error: {}", e);
+        }
+    }
+
+    pub fn sandbox_reset(&self, token: FunctionToken) {
+        let event_type = GenericValue::Vstring("reset");
+        let result = self.sandbox
+            .call_procedure(token, &[event_type]);
+            if let Err(e) = result {
+                eprintln!("UFO writeback error (reset): {}", e);
+            }
+    }
+
+    pub fn sandbox_destroy(&self, token: FunctionToken) {
+        let event_type = GenericValue::Vstring("destroy");
+        let result = self.sandbox
+            .call_procedure(token, &[event_type]);
+            if let Err(e) = result {
+                eprintln!("UFO writeback error (destroy): {}", e);
+            }
+    }
+}
+
 pub struct UfoDefinition {
     system: UfoSystem,
     vector_type: Rtype,
@@ -238,7 +291,7 @@ pub struct UfoDefinition {
     populate: FunctionToken,
     writeback: Option<FunctionToken>,
     finalizer: Option<FunctionToken>,
-    user_data: DataToken,
+    user_data: DataToken,    
 }
 
 impl UfoDefinition {
@@ -248,22 +301,56 @@ impl UfoDefinition {
         let header_size: usize = size_of::<libR_sys::SEXPREC>();
         r_bail_if!(header_size == 0 => "SEXP header should be non-zero");
 
-        let allocator_size: usize = size_of::<libR_sys::R_allocator>();
-        r_bail_if!(allocator_size == 0 => "Custom allocator should be non-zero");
+        // let allocator_size: usize = size_of::<libR_sys::R_allocator>();
+        // r_bail_if!(allocator_size == 0 => "Custom allocator should be non-zero"); // FIXME
+        // struct R_allocator {
+        //     custom_alloc_t mem_alloc; /* malloc equivalent */                                size: 8
+        //     custom_free_t  mem_free;  /* free equivalent */                                  size: 8
+        //     void *res;                /* reserved (maybe for copy) - must be NULL */         size: 8
+        //     void *data;               /* custom data for the allocator implementation */     size: 8
+        // };
+        let allocator_size: usize = 8 * 4; // FIXME hack
 
         eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
 
-        Ok(UfoObjectParams { 
-            header_size: header_size + allocator_size,
-            stride: self.vector_type.element_size().unwrap(),
-            element_ct: self.length,
+        let system = self.system.clone();
+        let token = self.populate.clone();
+        let populate = move |start: usize, end: usize, memory: *mut u8| {
+            system.sandbox_populate(token, start, end, memory)
+        };
 
-            populate: todo!(), 
-            writeback_listener: todo!(), 
-            
-            min_load_ct: self.chunk_length, 
-            read_only: self.read_only, 
-        })
+        if let Some(token) = self.writeback {
+            let system = self.system.clone();
+            let writeback_listener = 
+                move |event: UfoWriteListenerEvent|
+                    match event {
+                        UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
+                            system.sandbox_writeback(token, start_idx, end_idx, data),
+                        UfoWriteListenerEvent::Reset => 
+                            system.sandbox_reset(token),
+                        UfoWriteListenerEvent::UfoWBDestroy => 
+                            system.sandbox_destroy(token)
+                    };
+            Ok(UfoObjectParams { 
+                header_size: header_size + allocator_size,
+                stride: self.vector_type.element_size().unwrap(),
+                element_ct: self.length,
+                populate: Box::new(populate),
+                writeback_listener: Some(Box::new(writeback_listener)),
+                min_load_ct: self.chunk_length,
+                read_only: self.read_only, 
+            })  
+        } else {
+            Ok(UfoObjectParams { 
+                header_size: header_size + allocator_size,
+                stride: self.vector_type.element_size().unwrap(),
+                element_ct: self.length,
+                populate: Box::new(populate),
+                writeback_listener: None,            
+                min_load_ct: self.chunk_length,
+                read_only: self.read_only, 
+            })
+        }
     }
 
     pub fn construct_robj(self) -> Robj {

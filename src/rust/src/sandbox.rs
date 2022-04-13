@@ -3,7 +3,7 @@ use std::sync::{Mutex, Arc, MutexGuard};
 
 use itertools::Itertools;
 
-use ufo_ipc;
+use ufo_ipc::{self, GenericValueRef};
 use ufo_ipc::StartSubordinateProcess;
 use ufo_ipc::ControllerProcess;
 use ufo_ipc::GenericValue;
@@ -13,7 +13,7 @@ pub use ufo_ipc::FunctionToken;
 
 use extendr_api::*;
 
-use crate::r_error;
+use crate::{r_error, r_bail_if};
 
 #[derive(Clone)]
 pub struct Sandbox { process: Arc<Mutex<ControllerProcess>> }
@@ -60,9 +60,9 @@ impl Sandbox {
         Ok(data_token)
     }
 
-    pub fn call_function(&self, function_token: FunctionToken) -> Result<Vec<u8>> {
+    pub fn call_function(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<Vec<u8>> {
         let result = self.lock()?
-            .call_function(&function_token, &[], &[])
+            .call_function(&function_token, arguments, &[])
             .map_err(|e| r_error!("Cannot call function {:?} in sandbox: {}", function_token, e))?
             .value;
 
@@ -72,6 +72,17 @@ impl Sandbox {
             .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
 
         Ok(value)
+    }
+
+    pub fn call_procedure(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<()> {
+        let result = self.lock()?
+            .call_function(&function_token, arguments, &[])
+            .map_err(|e| r_error!("Cannot call function {:?} in sandbox: {}", function_token, e))?
+            .value;
+
+        r_bail_if!(result.is_empty() => "Invalid return for function {:?} in sandbox: expecting empty result", function_token);
+        
+        Ok(())
     }
 
     pub fn free_function(&self, function_token: &FunctionToken) -> Result<()> {
