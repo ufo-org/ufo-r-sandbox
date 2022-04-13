@@ -2,6 +2,7 @@ pub mod serder;
 pub mod typer;
 pub mod allocr;
 pub mod sandbox;
+pub mod server;
 mod helpers;
 
 use extendr_api::prelude::*;
@@ -105,6 +106,10 @@ impl RUnfriendlyAPI for UfoSystem {
     fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
         let ufo = r_or_bail!(self.core.get_ufo_by_address(pointer as usize), "Error freeing UFO");
         let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
+        // FIXME 
+        // if let Some(finalizer) = locked_ufo.config.finalizer {
+            todo!(); // Call finalizer somehow
+        // }
         let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
         Ok(wait_group.wait())
     }
@@ -225,7 +230,7 @@ impl UfoSystem {
             populate: populate_token,
             writeback: writeback_token,
             finalizer: finalizer_token,   
-            user_data: data_token,         
+            //user_data: data_token,         
         }.construct_robj();
     
         Ok(ufo)
@@ -291,7 +296,7 @@ pub struct UfoDefinition {
     populate: FunctionToken,
     writeback: Option<FunctionToken>,
     finalizer: Option<FunctionToken>,
-    user_data: DataToken,    
+    //user_data: DataToken,    
 }
 
 impl UfoDefinition {
@@ -358,7 +363,10 @@ impl UfoDefinition {
         let sexp_length = self.length as isize;
 
         let allocator = Box::into_raw(Box::new(CustomAllocator::from(self)));
-        let allocator: *mut libR_sys::R_allocator = allocator.cast();    
+        let allocator: *mut libR_sys::R_allocator = allocator.cast();
+
+        // FIXME
+        todo!();
         
         unsafe {
             single_threaded(|| {

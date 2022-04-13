@@ -5,6 +5,7 @@ use crate::r_err;
 use crate::r_bail_if;
 
 use extendr_api::*;
+use ufo_ipc::GenericValue;
 
 pub trait SerdeR {
     fn serialize(self) -> Result<Vec<u8>>;
@@ -63,5 +64,29 @@ impl DeserdeR for &Vec<u8> {
 impl DeserdeR for Vec<u8> {
     fn deserialize(self) -> Result<Robj> {
         call!("unserialize", self)
+    }
+}
+
+impl<Tv, Ts> DeserdeR for GenericValue<Tv, Ts> where Tv: DeserdeR, Ts: ToVectorValue {
+    fn deserialize(self) -> Result<Robj> {
+        Ok(match self {
+            GenericValue::Vu8(value) => Robj::from(value),
+            GenericValue::Vi8(value) => Robj::from(value),
+            GenericValue::Vu16(value) => Robj::from(value),
+            GenericValue::Vi16(value) => Robj::from(value),
+            GenericValue::Vu32(value) => Robj::from(value),
+            GenericValue::Vi32(value) => Robj::from(value),
+            GenericValue::Vu64(value) => Robj::from(value),
+            GenericValue::Vi64(value) => Robj::from(value),
+            GenericValue::Vf32(value) => Robj::from(value),
+            GenericValue::Vf64(value) => Robj::from(value),
+            GenericValue::Vusize(value) => Robj::from(value),
+            GenericValue::Visize(value) => Robj::from(value as i64),
+            GenericValue::Vbool(value) => Robj::from(value),
+            GenericValue::Vstring(value) => Robj::from(value),
+            GenericValue::Vbytes(value) => value.deserialize()?,
+            GenericValue::Token(value) => Robj::from(value.0),
+            GenericValue::Marker(value) => Robj::from(value),
+        })
     }
 }
