@@ -54,5 +54,6 @@ extern fn ufo_alloc(allocator: *mut CustomAllocator, size: libc::size_t) -> *mut
 
 extern fn ufo_free(allocator: *mut CustomAllocator, pointer: *mut libc::c_void) {
     let definition: &UfoDefinition = unsafe { &*(*allocator).data.cast() };
-    try_or_yell_impotently!(definition.system.free_ufo(pointer))
+    try_or_yell_impotently!(definition.finalize());
+    try_or_yell_impotently!(definition.system.free_ufo(pointer));
 }

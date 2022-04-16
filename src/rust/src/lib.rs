@@ -3,7 +3,7 @@ pub mod typer;
 pub mod allocr;
 pub mod sandbox;
 pub mod server;
-mod helpers;
+mod errors;
 
 use extendr_api::prelude::*;
 
@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use ufo_core::UfoCore;
 use ufo_core::UfoObjectParams;
 
+use errors::*;
+
 // use ufo_ipc;
 // use ufo_ipc::ProtocolCommand;
 // use ufo_ipc::FunctionToken;
@@ -34,48 +36,7 @@ use allocr::*;
 use typer::*;
 use serder::*;
 use sandbox::*;
-
-use crate::helpers::*;
-
-#[macro_export]
-macro_rules! r_or_bail {
-    ($task:expr, $($s:expr),*$(,)?) => {
-        match $task {
-            Ok(ok) => ok,
-            Err(error) => r_bail!("{}: {}", format!($($s,)+), error),
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! r_error {
-    ($($s:expr),*$(,)?) => {
-        extendr_api::Error::Other(format!($($s,)+))
-    };
-}
-
-#[macro_export]
-macro_rules! r_err {
-    ($($s:expr),*$(,)?) => {
-        Err(extendr_api::Error::Other(format!($($s,)+)))
-    };
-}
-
-#[macro_export]
-macro_rules! r_bail {
-    ($($s:expr),+) => {
-        return Err(r_error!($($s,)+))
-    };    
-}
-
-#[macro_export]
-macro_rules! r_bail_if {
-    ($cond:expr => $($s:expr),+) => {
-        if $cond {
-            return Err(r_error!($($s,)+))
-        }
-    };    
-}
+use errors::*;
 
 #[derive(Clone)]
 pub struct UfoSystem {
@@ -104,12 +65,8 @@ impl RUnfriendlyAPI for UfoSystem {
     }
 
     fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
-        let ufo = r_or_bail!(self.core.get_ufo_by_address(pointer as usize), "Error freeing UFO");
+        let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
         let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
-        // FIXME 
-        // if let Some(finalizer) = locked_ufo.config.finalizer {
-            todo!(); // Call finalizer somehow
-        // }
         let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
         Ok(wait_group.wait())
     }
@@ -230,7 +187,7 @@ impl UfoSystem {
             populate: populate_token,
             writeback: writeback_token,
             finalizer: finalizer_token,   
-            //user_data: data_token,         
+            user_data: data_token,         
         }.construct_robj();
     
         Ok(ufo)
@@ -296,7 +253,7 @@ pub struct UfoDefinition {
     populate: FunctionToken,
     writeback: Option<FunctionToken>,
     finalizer: Option<FunctionToken>,
-    //user_data: DataToken,    
+    user_data: DataToken,    
 }
 
 impl UfoDefinition {
@@ -307,14 +264,16 @@ impl UfoDefinition {
         r_bail_if!(header_size == 0 => "SEXP header should be non-zero");
 
         // let allocator_size: usize = size_of::<libR_sys::R_allocator>();
-        // r_bail_if!(allocator_size == 0 => "Custom allocator should be non-zero"); // FIXME
+        let allocator_size: usize = size_of::<CustomAllocator>();
+        r_bail_if!(allocator_size == 0 => "Custom allocator should be non-zero");        
+
         // struct R_allocator {
         //     custom_alloc_t mem_alloc; /* malloc equivalent */                                size: 8
         //     custom_free_t  mem_free;  /* free equivalent */                                  size: 8
         //     void *res;                /* reserved (maybe for copy) - must be NULL */         size: 8
         //     void *data;               /* custom data for the allocator implementation */     size: 8
         // };
-        let allocator_size: usize = 8 * 4; // FIXME hack
+        assert_eq!(4 * 8, allocator_size); // This is in fact the size of R_allocator_t;    
 
         eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
 
@@ -360,19 +319,32 @@ impl UfoDefinition {
 
     pub fn construct_robj(self) -> Robj {
         let sexp_type = self.vector_type.as_sxp() as u32;
-        let sexp_length = self.length as isize;
+        let length = self.length as isize;
 
-        let allocator = Box::into_raw(Box::new(CustomAllocator::from(self)));
-        let allocator: *mut libR_sys::R_allocator = allocator.cast();
-
-        // FIXME
-        todo!();
-        
+        let allocator = 
+            Box::into_raw(Box::new(CustomAllocator::from(self))).cast();
+             
         unsafe {
             single_threaded(|| {
-                Robj::from_sexp(libR_sys::Rf_allocVector3(sexp_type, sexp_length, allocator))
+                Robj::from_sexp(libR_sys::Rf_allocVector3(sexp_type, length, allocator))
             })
         }
+    }
+
+    pub fn finalize(&self) -> Result<()> {
+        if let Some(finalizer) = self.finalizer {
+            self.system.sandbox.call_procedure(finalizer, &[])?;
+            self.system.sandbox.free_function(&finalizer)?;
+        }
+
+        if let Some(writeback) = self.writeback {
+            self.system.sandbox.free_function(&writeback)?;
+        }
+
+        self.system.sandbox.free_function(&self.populate)?;
+        self.system.sandbox.free_data(&self.user_data)?;
+
+        Ok(())
     }
 }
 
