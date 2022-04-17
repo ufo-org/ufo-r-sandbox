@@ -89,9 +89,9 @@ ufo_system_shutdown <- jeff_goldbloom;
 #' @export
 ufo_vector <- function(mode, length,
                        populate, writeback = NULL, finalizer = NULL,
-                       read_only = FALSE, chunk_length = 0) {
+                       user_data = NULL, read_only = FALSE, chunk_length = 0) {
     system <- ufo_system_get_or_create()
-    system$new_ufo(mode = mode, length = length,
+    system$new_ufo(mode = mode, length = length, user_data = user_data,
                    populate = populate, writeback = writeback,
                    finalizer = finalizer, read_only = read_only,
                    chunk_length = chunk_length)
@@ -115,8 +115,8 @@ ufo_vector <- function(mode, length,
 #' @return a lazily loaded integer vector of the specified length.
 #' @export
 ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "integer", length = length,
+                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "integer", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
@@ -140,8 +140,8 @@ ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @return a lazily loaded numeric vector of the specified length.
 #' @export
 ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "numeric", length = length,
+                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "numeric", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
@@ -165,8 +165,8 @@ ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @return a lazily loaded logical vector of the specified length.
 #' @export
 ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "logical", length = length,
+                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "logical", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
@@ -190,8 +190,8 @@ ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @return a lazily loaded character vector of the specified length.
 #' @export
 ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
-                          read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "character", length = length,
+                          user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "character", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
@@ -215,8 +215,8 @@ ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @return a lazily loaded complex vector of the specified length.
 #' @export
 ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "complex", length = length,
+                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "complex", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
@@ -240,8 +240,8 @@ ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @return a lazily loaded raw vector of the specified length.
 #' @export
 ufo_raw <- function(length, populate, writeback = NULL, finalizer = NULL,
-                    read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "raw", length = length,
+                    user_data = NULL, read_only = FALSE, chunk_length = 0) {
+    ufo_vector(mode = "raw", length = length, user_data = user_data,
                populate = populate, writeback = writeback,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)

@@ -57,3 +57,15 @@ extern fn ufo_free(allocator: *mut CustomAllocator, pointer: *mut libc::c_void) 
     try_or_yell_impotently!(definition.finalize());
     try_or_yell_impotently!(definition.system.free_ufo(pointer));
 }
+
+pub trait HeaderSize {
+    fn header_size(&self) -> usize;
+}
+
+impl HeaderSize for Robj {
+    fn header_size(&self) -> usize {        
+        let sexp = unsafe { self.get() };
+        let data = unsafe { DATAPTR_RO(sexp)};
+        data as usize - sexp as usize
+    }
+}

@@ -7,10 +7,12 @@ mod errors;
 
 use extendr_api::prelude::*;
 
+use libR_sys::DATAPTR_RO;
 use libc::c_void;
+
 use ufo_core::UfoCoreConfig;
 use ufo_core::UfoPopulateError;
-use ufo_core::UfoPopulateFn;
+// use ufo_core::UfoPopulateFn;
 use ufo_core::UfoWriteListenerEvent;
 use ufo_ipc::DataToken;
 use ufo_ipc::GenericValue;
@@ -21,6 +23,8 @@ use ufo_core::UfoCore;
 use ufo_core::UfoObjectParams;
 
 use errors::*;
+
+use server::Server;
 
 // use ufo_ipc;
 // use ufo_ipc::ProtocolCommand;
@@ -57,6 +61,10 @@ impl std::fmt::Debug for UfoSystem {
 
 impl RUnfriendlyAPI for UfoSystem {
     fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
+        eprintln!("UfoSystem::create_ufo:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   prototype:      ...");
+
         let config = prototype.new_config();
         let ufo = r_or_bail!(self.core.allocate_ufo(config), "Error constructing UFO");
         let locked_ufo = r_or_bail!(ufo.read(), "Error dereferencing newly created UFO");
@@ -65,6 +73,10 @@ impl RUnfriendlyAPI for UfoSystem {
     }
 
     fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
+        eprintln!("UfoSystem::free_ufo:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   pointer         {:?}", pointer);
+
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
         let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
         let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
@@ -75,6 +87,10 @@ impl RUnfriendlyAPI for UfoSystem {
 #[extendr]
 impl UfoSystem {
     pub fn initialize(writeback_path: String, high_watermark: i64, low_watermark: i64) -> Result<Self> {
+        eprintln!("UfoSystem::initialize:");
+        eprintln!("   writeback_path: {:?}", writeback_path);
+        eprintln!("   high_watermark: {:?}", high_watermark);
+        eprintln!("   low_watermark:  {:?}", low_watermark);
 
         println!("Ufo core is initializing...");
 
@@ -120,12 +136,25 @@ impl UfoSystem {
     }
 
     pub fn shutdown(&self) {
+        eprintln!("UfoSystem::shutdown:");
+        eprintln!("   self:           {:?}", self);
+
         eprintln!("Ufo core is shutting down...");
         self.core.shutdown()
     }
 
-    pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {
-        
+    pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
+        eprintln!("UfoSystem::new_ufo:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   mode:           {:?}", mode);
+        eprintln!("   length:         {:?}", length);
+        eprintln!("   user_data:      {:?}", user_data);
+        eprintln!("   populate:       {:?}", populate);
+        eprintln!("   writeback:      {:?}", writeback);
+        eprintln!("   finalizer:      {:?}", finalizer);
+        eprintln!("   read_only:      {:?}", read_only);
+        eprintln!("   chunk_length:   {:?}", chunk_length);
+
         r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
         r_bail_if!(length == 0 => "Cannot create an empty UFO");
         r_bail_if!(length == 1 => "Cannot create a scalar UFO");
@@ -196,6 +225,13 @@ impl UfoSystem {
 
 impl UfoSystem {
     pub fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
+        eprintln!("UfoSystem::sandbox_populate:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   start:          {:?}", start);
+        eprintln!("   end:            {:?}", end);
+        eprintln!("   memory:         {:?}", memory);
+
         let result = self.sandbox
             .call_function(token, &[GenericValue::Vusize(start), GenericValue::Vusize(end)])
             .map_err(|e| {
@@ -209,6 +245,13 @@ impl UfoSystem {
     }
 
     pub fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
+        eprintln!("UfoSystem::sandbox_writeback:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   start:          {:?}", start);
+        eprintln!("   end:            {:?}", end);
+        eprintln!("   memory:         {:?}", memory);
+
         let data = GenericValue::Vbytes(unsafe {
             std::slice::from_raw_parts(memory, end - start)
         });
@@ -225,6 +268,10 @@ impl UfoSystem {
     }
 
     pub fn sandbox_reset(&self, token: FunctionToken) {
+        eprintln!("UfoSystem::sandbox_reset:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+
         let event_type = GenericValue::Vstring("reset");
         let result = self.sandbox
             .call_procedure(token, &[event_type]);
@@ -234,6 +281,10 @@ impl UfoSystem {
     }
 
     pub fn sandbox_destroy(&self, token: FunctionToken) {
+        eprintln!("UfoSystem::sandbox_destroy:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+
         let event_type = GenericValue::Vstring("destroy");
         let result = self.sandbox
             .call_procedure(token, &[event_type]);
@@ -243,6 +294,7 @@ impl UfoSystem {
     }
 }
 
+#[derive(Debug)]
 pub struct UfoDefinition {
     system: UfoSystem,
     vector_type: Rtype,
@@ -258,9 +310,14 @@ pub struct UfoDefinition {
 
 impl UfoDefinition {
     pub fn prototype(&self) -> Result<UfoObjectParams> {
+        eprintln!("UfoDefinition::prototype:");
+        eprintln!("   self:           {:?}", self);
+
         r_bail_if!(!self.vector_type.is_vector() => "UFO needs to be a vector type");
 
-        let header_size: usize = size_of::<libR_sys::SEXPREC>();
+        // FIXME I don't feel like dealing with regenerating the entirety of libR-sys just to get this one number.
+        //let header_size: usize = size_of::<libR_sys::SEXPREC>(); 
+        let header_size = r!(42).header_size();
         r_bail_if!(header_size == 0 => "SEXP header should be non-zero");
 
         // let allocator_size: usize = size_of::<libR_sys::R_allocator>();
@@ -318,6 +375,9 @@ impl UfoDefinition {
     }
 
     pub fn construct_robj(self) -> Robj {
+        eprintln!("UfoDefinition::construct_robj:");
+        eprintln!("   self:           {:?}", self);
+
         let sexp_type = self.vector_type.as_sxp() as u32;
         let length = self.length as isize;
 
@@ -332,6 +392,9 @@ impl UfoDefinition {
     }
 
     pub fn finalize(&self) -> Result<()> {
+        eprintln!("UfoDefinition::finalize:");
+        eprintln!("   self:           {:?}", self);
+
         if let Some(finalizer) = self.finalizer {
             self.system.sandbox.call_procedure(finalizer, &[])?;
             self.system.sandbox.free_function(&finalizer)?;
@@ -348,12 +411,18 @@ impl UfoDefinition {
     }
 }
 
+#[extendr]
+pub fn start_sandbox() -> Result<()> {
+    Server::new().listen()
+}
+
 // Macro to generate exports.
 // This ensures exported functions are registered with R.
 // See corresponding C code in `entrypoint.c`.
 extendr_module! {
     mod ufosandbox;
     impl UfoSystem;
+    fn start_sandbox;
 }
 
 /*

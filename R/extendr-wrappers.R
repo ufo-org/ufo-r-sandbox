@@ -8,6 +8,8 @@
 #' @useDynLib ufosandbox, .registration = TRUE
 NULL
 
+start_sandbox <- function() .Call(wrap__start_sandbox)
+
 UfoSystem <- new.env(parent = emptyenv())
 
 UfoSystem$initialize <- function(writeback_path, high_watermark, low_watermark) .Call(wrap__UfoSystem__initialize, writeback_path, high_watermark, low_watermark)
