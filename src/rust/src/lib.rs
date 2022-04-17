@@ -63,7 +63,7 @@ impl RUnfriendlyAPI for UfoSystem {
     fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
         eprintln!("UfoSystem::create_ufo:");
         eprintln!("   self:           {:?}", self);
-        eprintln!("   prototype:      ...");
+        eprintln!("   prototype:      {:?}", prototype);
 
         let config = prototype.new_config();
         let ufo = r_or_bail!(self.core.allocate_ufo(config), "Error constructing UFO");
