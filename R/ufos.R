@@ -25,21 +25,21 @@ function(writeback_path, high_water_mark, low_water_mark) {
   }
 
   high_water_mark_mb <- if (missing(high_water_mark)) {
-    getOption("ufos.high_water_mark_mb", default = 2048)
+    getOption("ufos.high_water_mark_mb", default = 100)
   } else {
     high_water_mark
   }
 
   low_water_mark_mb <- if (missing(low_water_mark)) {
-    getOption("ufos.low_water_mark_mb", default = 1024)
+    getOption("ufos.low_water_mark_mb", default = 10)
   } else {
     low_water_mark
   }
 
   .ufo_core <- UfoSystem$initialize(
     as.character(directory),
-    as.integer(high_water_mark_mb),
-    as.integer(low_water_mark_mb)
+    as.integer(high_water_mark_mb * 1024 * 1024),
+    as.integer(low_water_mark_mb * 1024 * 1024)
   )
 }
 
@@ -246,3 +246,23 @@ ufo_raw <- function(length, populate, writeback = NULL, finalizer = NULL,
                finalizer = finalizer, read_only = read_only,
                chunk_length = chunk_length)
 }
+
+# These are just signatures of various functions used by UFOs, for reference.
+ufo_populate_prototype <- function(start, end, ...) NULL
+ufo_writeback_prototype <- function(start, end, data, ...) NULL
+ufo_reset_prototype <- function(...) NULL
+ufo_destroy_prototype <- function(...) NULL
+ufo_finalizer_prototype <- function(...) NULL
+
+#' @export
+ufo_call <- compiler::cmpfun(
+  function(user_function, user_data, ...) {
+    print("function")
+    print(user_function)
+    print("data")
+    print(user_data)
+    print("...")
+    print(list(...))
+    do.call(user_function, c(list(...), user_data))
+  }
+)

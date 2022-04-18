@@ -3,6 +3,7 @@ pub mod typer;
 pub mod allocr;
 pub mod sandbox;
 pub mod server;
+pub mod ufotype;
 mod errors;
 
 use extendr_api::prelude::*;
@@ -16,6 +17,7 @@ use ufo_core::UfoPopulateError;
 use ufo_core::UfoWriteListenerEvent;
 use ufo_ipc::DataToken;
 use ufo_ipc::GenericValue;
+use ufotype::UfoType;
 use core::mem::size_of;
 use std::path::PathBuf;
 
@@ -25,6 +27,9 @@ use ufo_core::UfoObjectParams;
 use errors::*;
 
 use server::Server;
+
+const HIGH_WATERMARK_DEFAULT: usize = 100 * 1024 * 1024; //100MB
+const LOW_WATERMARK_DEFAULT: usize  = 10  * 1024 * 1024; //10MB
 
 // use ufo_ipc;
 // use ufo_ipc::ProtocolCommand;
@@ -40,7 +45,7 @@ use allocr::*;
 use typer::*;
 use serder::*;
 use sandbox::*;
-use errors::*;
+// use errors::*;
 
 #[derive(Clone)]
 pub struct UfoSystem {
@@ -66,8 +71,8 @@ impl RUnfriendlyAPI for UfoSystem {
         eprintln!("   prototype:      {:?}", prototype);
 
         let config = prototype.new_config();
-        let ufo = r_or_bail!(self.core.allocate_ufo(config), "Error constructing UFO");
-        let locked_ufo = r_or_bail!(ufo.read(), "Error dereferencing newly created UFO");
+        let ufo = self.core.allocate_ufo(config).rewrap(|| "Error constructing UFO")?;
+        let locked_ufo = ufo.read().rewrap(|| "Error dereferencing newly created UFO")?;
         let ufo_pointer = locked_ufo.header_ptr();
         Ok(ufo_pointer)
     }
@@ -78,21 +83,24 @@ impl RUnfriendlyAPI for UfoSystem {
         eprintln!("   pointer         {:?}", pointer);
 
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
-        let mut locked_ufo = r_or_bail!(ufo.write(), "Error locking UFO during free");
-        let wait_group = r_or_bail!(locked_ufo.free(), "Error performing free on UFO");
-        Ok(wait_group.wait())
+        let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during free")?;
+        let wait_group = locked_ufo.free().rewrap(|| "Error performing free on UFO")?;
+        wait_group.wait();
+
+        Ok(())
     }
 }
 
 #[extendr]
 impl UfoSystem {
     pub fn initialize(writeback_path: String, high_watermark: i64, low_watermark: i64) -> Result<Self> {
+        
+        println!("Ufo core is initializing...");
+
         eprintln!("UfoSystem::initialize:");
         eprintln!("   writeback_path: {:?}", writeback_path);
         eprintln!("   high_watermark: {:?}", high_watermark);
         eprintln!("   low_watermark:  {:?}", low_watermark);
-
-        println!("Ufo core is initializing...");
 
         let directory = PathBuf::from(writeback_path.as_str());
         r_bail_if!(!directory.exists() =>
@@ -111,13 +119,16 @@ impl UfoSystem {
                    "Specified writeback path {} is not writeable", 
                    writeback_path);
 
-        r_bail_if!(high_watermark <= 0 => 
-                   "High watermark must be greater than zero (provided value: {})", 
+        r_bail_if!(high_watermark < 0 => 
+                   "High watermark must be a positive value (provided value: {})", 
                    high_watermark);
     
-        r_bail_if!(low_watermark <= 0 => 
-                   "Low watermark must be greater than zero (provided value: {})", 
+        r_bail_if!(low_watermark < 0 => 
+                   "Low watermark must be a positive value (provided value: {})", 
                    low_watermark);
+
+        let high_watermark = if high_watermark != 0 { high_watermark as usize } else { HIGH_WATERMARK_DEFAULT };
+        let low_watermark = if low_watermark != 0 { low_watermark as usize } else { LOW_WATERMARK_DEFAULT };
     
         r_bail_if!(low_watermark >= high_watermark => 
                   "High watermark must be greater than low watermark (currently low={} vs. high={})", 
@@ -128,6 +139,8 @@ impl UfoSystem {
             high_watermark: high_watermark as usize, 
             low_watermark: low_watermark as usize,
         };
+
+        eprintln!("   config:         {:?}", config);
 
         Ok(UfoSystem{ 
             core: r_or_bail!(UfoCore::new(config), "Cannot start UFO core system"),
@@ -174,7 +187,7 @@ impl UfoSystem {
     
         let chunk_length = if chunk_length <= 0 { None } else { Some(chunk_length as usize) };
     
-        let vector_type = match mode.to_lowercase().as_str() {
+        let vector_type = match  mode.to_lowercase().as_str() {
             "vector" => Rtype::List,
             "numeric" | "double" => Rtype::Doubles,
             "integer" => Rtype::Integers,
@@ -187,23 +200,25 @@ impl UfoSystem {
 
         let serialized_data = user_data.serialize()?;
         let data_token = self.sandbox.register_data(serialized_data)?;
+        let return_type = UfoType::try_from(mode)
+            .rewrap(|| "Cannot derive a UFO return type from mode: {}")?;
         
         let serialized_populate = populate.serialize()?;
         let populate_token = 
-            self.sandbox.register_function(serialized_populate, data_token)?;
+            self.sandbox.register_function(serialized_populate, data_token, &["start", "end"], return_type)?;
 
         let serialized_writeback = writeback
             .map(|function| function.serialize())
             .extract_result()?;
         let writeback_token = serialized_writeback.map(|serialized_function| {
-                self.sandbox.register_function(serialized_function, data_token)
+                self.sandbox.register_procedure(serialized_function, data_token, &["start", "end", "data"])
             }).extract_result()?;
 
         let serialized_finalizer = finalizer
             .map(|function| function.serialize())
             .extract_result()?;
         let finalizer_token = serialized_finalizer.map(|serialized_function| {
-                self.sandbox.register_function(serialized_function, data_token)
+                self.sandbox.register_procedure(serialized_function, data_token, &[])
             }).extract_result()?;
        
         let ufo = UfoDefinition { 
@@ -224,7 +239,7 @@ impl UfoSystem {
 }
 
 impl UfoSystem {
-    pub fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
+    pub fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8, return_type: UfoType) -> std::result::Result<(), UfoPopulateError> {
         eprintln!("UfoSystem::sandbox_populate:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
@@ -238,9 +253,30 @@ impl UfoSystem {
                 eprintln!("UFO populate error: {}", e);
                 UfoPopulateError
             })?;
-        unsafe {
-            std::ptr::copy_nonoverlapping(result.as_ptr(), memory, result.len());
+
+        let size = result.len() * return_type.element_size();
+        // let deserialized_result = result.deserialize() // FIXME: WE CAN'T DESERIALZIE HERE!!!!!!!!!!!!!!!!!!!!!!!!!
+        //     .map_err(|e| {
+        //         eprintln!("UFO populate error: {}", e);
+        //         UfoPopulateError
+        //     })?;       
+
+        match return_type {
+            UfoType::Integer => {
+                todo!()
+            }
+            UfoType::Numeric => todo!(),
+            UfoType::Character => todo!(),
+            UfoType::Complex => todo!(),
+            UfoType::Boolean => todo!(),
+            UfoType::Raw => todo!(),
+            UfoType::Vector => todo!(),
         }
+
+        // unsafe {
+        //     // let data_ptr = libR_sys::DATAPTR(deserialized_result.get()) as *const u8;
+        //     std::ptr::copy_nonoverlapping(result.as_ptr(), memory, size);
+        // }
         Ok(())
     }
 
@@ -257,10 +293,10 @@ impl UfoSystem {
         });
         let start = GenericValue::Vusize(start);
         let end = GenericValue::Vusize(end);
-        let event_type = GenericValue::Vstring("writeback");
+        // let event_type = GenericValue::Vstring("writeback");
 
         let result = self.sandbox
-            .call_procedure(token, &[event_type, start, end, data]);
+            .call_procedure(token, &[/*event_type, */ start, end, data]);
 
         if let Err(e) = result {
             eprintln!("UFO writeback error: {}", e);
@@ -272,9 +308,9 @@ impl UfoSystem {
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
 
-        let event_type = GenericValue::Vstring("reset");
+        // let event_type = GenericValue::Vstring("reset");
         let result = self.sandbox
-            .call_procedure(token, &[event_type]);
+            .call_procedure(token, &[/*event_type*/]);
             if let Err(e) = result {
                 eprintln!("UFO writeback error (reset): {}", e);
             }
@@ -285,9 +321,9 @@ impl UfoSystem {
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
 
-        let event_type = GenericValue::Vstring("destroy");
+        // let event_type = GenericValue::Vstring("destroy");
         let result = self.sandbox
-            .call_procedure(token, &[event_type]);
+            .call_procedure(token, &[/*event_type*/]);
             if let Err(e) = result {
                 eprintln!("UFO writeback error (destroy): {}", e);
             }
@@ -299,7 +335,7 @@ pub struct UfoDefinition {
     system: UfoSystem,
     vector_type: Rtype,
     length: usize,                 // in #elements
-    chunk_length: Option<usize>,   // in B
+    chunk_length: Option<usize>,   // in #elements
     read_only: bool,
     requested_size: Option<usize>, // in B - the exact amount of B R is asking for, filled in upon request
     populate: FunctionToken,
@@ -336,11 +372,20 @@ impl UfoDefinition {
 
         let system = self.system.clone();
         let token = self.populate.clone();
+        let return_type =  UfoType::try_from(&self.vector_type)?;
+
         let populate = move |start: usize, end: usize, memory: *mut u8| {
-            system.sandbox_populate(token, start, end, memory)
+            system.sandbox_populate(token, start, end, memory, return_type)
         };
 
-        if let Some(token) = self.writeback {
+        let min_load_ct = self.chunk_length.map(|elements| if elements != 0 {
+            self.vector_type.element_size().map(|size| elements * size)
+        } else {
+            None
+        }).flatten();
+
+        // FIXME writeback, reset and destroy should be different function tokens with different parameters.
+        let ufo_object_params = if let Some(token) = self.writeback {
             let system = self.system.clone();
             let writeback_listener = 
                 move |event: UfoWriteListenerEvent|
@@ -352,26 +397,28 @@ impl UfoDefinition {
                         UfoWriteListenerEvent::UfoWBDestroy => 
                             system.sandbox_destroy(token)
                     };
-            Ok(UfoObjectParams { 
+            UfoObjectParams { 
                 header_size: header_size + allocator_size,
                 stride: self.vector_type.element_size().unwrap(),
                 element_ct: self.length,
                 populate: Box::new(populate),
                 writeback_listener: Some(Box::new(writeback_listener)),
-                min_load_ct: self.chunk_length,
+                min_load_ct,
                 read_only: self.read_only, 
-            })  
+            }
         } else {
-            Ok(UfoObjectParams { 
+            UfoObjectParams { 
                 header_size: header_size + allocator_size,
                 stride: self.vector_type.element_size().unwrap(),
                 element_ct: self.length,
                 populate: Box::new(populate),
                 writeback_listener: None,            
-                min_load_ct: self.chunk_length,
+                min_load_ct,
                 read_only: self.read_only, 
-            })
-        }
+            }
+        };
+
+        Ok(ufo_object_params)
     }
 
     pub fn construct_robj(self) -> Robj {

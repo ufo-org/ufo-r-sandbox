@@ -65,7 +65,7 @@ pub trait HeaderSize {
 impl HeaderSize for Robj {
     fn header_size(&self) -> usize {        
         let sexp = unsafe { self.get() };
-        let data = unsafe { DATAPTR_RO(sexp)};
+        let data = unsafe { DATAPTR_RO(sexp) };
         data as usize - sexp as usize
     }
 }

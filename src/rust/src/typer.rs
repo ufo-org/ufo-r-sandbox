@@ -2,6 +2,10 @@ use std::mem::size_of;
 
 use extendr_api::prelude::*;
 use extendr_api::rtype_to_sxp;
+use ufo_ipc::GenericValueRef;
+
+use crate::errors::IntoServerError;
+use crate::r_err;
 
 pub trait RtypeTools: Sized {
     fn copy(&self) -> Self;
@@ -73,4 +77,75 @@ impl RtypeTools for Rtype {
             _ => None,
         }
     }       
+}
+
+trait IntoGenericRefVector{
+    fn serialize_into_generic_ref_vector<'a>(&'a self) -> Result<Vec<GenericValueRef<'a>>>;
+}
+
+// impl IntoGenericRefVector for Rbool {
+//     fn serialize_into_generic_ref_vector<'a>(&'a self) -> Result<Vec<GenericValueRef<'a>>> {
+//         let vec: Vec<bool> = self.into();
+//         todo!()
+//     }
+// }
+
+impl IntoGenericRefVector for Robj{
+    fn serialize_into_generic_ref_vector<'a>(&'a self) -> Result<Vec<GenericValueRef<'a>>> {
+        match self.rtype() {
+            Rtype::Rstr => {
+                todo!()
+            }
+            Rtype::Logicals => {
+                let vector = self.as_raw_slice()
+                    .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
+                    .into_iter()
+                    .map(|value| GenericValueRef::Vu8(*value))
+                    .collect();
+
+                Ok(vector)
+            }
+            Rtype::Integers => {
+                let vector = self.as_integer_vector()
+                    .rewrap(|| format!("Cannot represent vector of type {:?} as integers", self))?
+                    .into_iter()
+                    .map(|value| GenericValueRef::Vi32(value))
+                    .collect();
+
+                Ok(vector)
+            }
+            Rtype::Doubles => {
+                let vector = self.as_real_iter()
+                    .rewrap(|| format!("Cannot represent vector of type {:?} as doubles", self))?
+                    .map(|value| GenericValueRef::Vf64(*value))
+                    .collect();
+
+                Ok(vector)
+            }
+            Rtype::Complexes => {
+                todo!()
+            }
+            Rtype::Strings => {
+                let vector = self.as_str_iter()
+                    .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
+                    .map(|value| GenericValueRef::Vstring(value))
+                    .collect();
+
+                Ok(vector)
+            }
+            Rtype::List => {
+                todo!()
+            }
+            Rtype::Raw => {
+                let vector = self.as_raw_slice()
+                    .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
+                    .into_iter()
+                    .map(|value| GenericValueRef::Vu8(*value))
+                    .collect();
+
+                Ok(vector)
+            }
+            rtype => r_err!("Cannot serialize object {:?} into a generic vector", rtype),
+        }
+    }
 }
