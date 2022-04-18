@@ -261,22 +261,10 @@ impl UfoSystem {
         //         UfoPopulateError
         //     })?;       
 
-        match return_type {
-            UfoType::Integer => {
-                todo!()
-            }
-            UfoType::Numeric => todo!(),
-            UfoType::Character => todo!(),
-            UfoType::Complex => todo!(),
-            UfoType::Boolean => todo!(),
-            UfoType::Raw => todo!(),
-            UfoType::Vector => todo!(),
+        unsafe {
+            // let data_ptr = libR_sys::DATAPTR(deserialized_result.get()) as *const u8;
+            std::ptr::copy_nonoverlapping(result.as_ptr(), memory, size);
         }
-
-        // unsafe {
-        //     // let data_ptr = libR_sys::DATAPTR(deserialized_result.get()) as *const u8;
-        //     std::ptr::copy_nonoverlapping(result.as_ptr(), memory, size);
-        // }
         Ok(())
     }
 

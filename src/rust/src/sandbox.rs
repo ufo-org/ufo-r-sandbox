@@ -123,7 +123,7 @@ impl Sandbox {
         Ok(data_token)
     }
 
-    pub fn call_function(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<Vec<GenericValue<Vec<u8>, String>>> {
+    pub fn call_function(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<Vec<u8>> {
         eprintln!("Sandbox::call_function:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   function_token: {:?}", function_token);
@@ -134,12 +134,12 @@ impl Sandbox {
             .map_err(|e| r_error!("Cannot call function {:?} in sandbox: {}", function_token, e))?
             .value;
 
-        // let value = result.into_iter().exactly_one()
-        //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?
-        //     .expect_bytes_into()
-        //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
+        let bytes = result.into_iter().exactly_one()
+            .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?
+            .expect_bytes_into()
+            .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
 
-        Ok(result)
+        Ok(bytes)
     }
 
     pub fn call_procedure(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<()> {

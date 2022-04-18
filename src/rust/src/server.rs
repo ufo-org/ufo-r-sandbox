@@ -98,7 +98,7 @@ impl Server {
         Ok(())
     }
 
-    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<Vec<GenericValueRef>> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
+    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<&[u8]> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
         eprintln!("Server::call_function:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
@@ -139,16 +139,20 @@ impl Server {
         eprintln!("   result:         {:?}", result);
 
         // let serialized_result = result.serialize()?;        
-        // eprintln!("   serialized:     {:?}", serialized_result);
+        // eprintln!("   serialized:     {:?}", serialized_result);        
 
         r_bail_if!(!function.return_type.check_against(&result) => 
             "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} into vector of expected type {:?}", 
             token, result, function.return_type);
 
-        
-
+        let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
+        let slice: &[u8] = unsafe {
+            let data_ptr = libR_sys::DATAPTR_RO(result.get());
+            std::slice::from_raw_parts(data_ptr as *const u8, size)
+        };
+       
         // Ok(serialized_result)
-        todo!()
+        Ok(slice)
     }
 
     fn free_function(&mut self, token: FunctionToken) -> Result<()> {
@@ -205,8 +209,8 @@ impl Server {
 
                 ProtocolCommand::Call { token, args } => {
                     let result = self.call_function(token, args)?;
-                    // let generic = GenericValueRef::Vbytes(result.as_slice());
-                    server.respond_to_call(result.as_slice(), &[])
+                    let generic = GenericValueRef::Vbytes(result);
+                    server.respond_to_call(&[generic], &[])
                         .rewrap(|| "Sandbox server error: Cannot respond to function call")?;
                 },
 
