@@ -95,18 +95,20 @@ ufo_vector <- function(mode, length, populate,
                        writeback = NULL, reset = NULL, destroy = NULL, 
                        finalizer = NULL,
                        read_only = FALSE, chunk_length = 0, ...) {
-    compile <- function(f) {
-      #ifelse(is.function(f), compiler::cmpfun(f), f)
-      f
-    }
+    # compile <- function(f)
+    #   if (is.function(f)) {
+    #     compiler::cmpfun(f)
+    #   } else {
+    #     f
+    #   }
 
-    populate <- compile(populate)
-    writeback <- compile(writeback)
-    finalizer <- compile(finalizer)
-    reset <- compile(reset)
-    destroy <- compile(destroy)
+    # populate <- compile(populate)
+    # writeback <- compile(writeback)
+    # finalizer <- compile(finalizer)
+    # reset <- compile(reset)
+    # destroy <- compile(destroy)
 
-    system <- ufo_system_get_or_create()   
+    system <- ufo_system_get_or_create()
     system$new_ufo(mode = mode, length = length, user_data = list(...),
                    populate = populate, writeback = writeback,
                    reset = reset, destroy = destroy,
