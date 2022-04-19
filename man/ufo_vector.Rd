@@ -12,9 +12,12 @@ ufo_vector(
   length,
   populate,
   writeback = NULL,
+  reset = NULL,
+  destroy = NULL,
   finalizer = NULL,
   read_only = FALSE,
-  chunk_length = 0
+  chunk_length = 0,
+  ...
 )
 }
 \arguments{
@@ -28,6 +31,11 @@ logical, character, complex, raw.}
 \item{writeback}{a function called when a modified chunk of the vector
 is garbage collected (optional).}
 
+\item{reset}{a function called when a modified chunk is reset discarding
+dirty, manually written values.}
+
+\item{destroy}{a function called when a modified chunk is being destroyed}
+
 \item{finalizer}{a function called when the entire vector is garbage
 collected (optional).}
 
@@ -37,6 +45,8 @@ collected (optional).}
 \item{chunk_length}{the minimum number of elements loaded at once,
 will always be rounded up to a full memory page
 (optional, a page by default).}
+
+\item{...}{user data passed to populate, writeback, and finalizer functions,}
 }
 \value{
 a lazily loaded vector of the specified type and length.

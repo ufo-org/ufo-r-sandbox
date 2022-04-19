@@ -11,9 +11,12 @@ ufo_numeric(
   length,
   populate,
   writeback = NULL,
+  reset = NULL,
+  destroy = NULL,
   finalizer = NULL,
   read_only = FALSE,
-  chunk_length = 0
+  chunk_length = 0,
+  ...
 )
 }
 \arguments{
@@ -23,6 +26,11 @@ ufo_numeric(
 
 \item{writeback}{a function called when a modified chunk of the vector
 is garbage collected (optional).}
+
+\item{reset}{a function called when a modified chunk is reset discarding
+dirty, manually written values.}
+
+\item{destroy}{a function called when a modified chunk is being destroyed}
 
 \item{finalizer}{a function called when the entire vector is garbage
 collected (optional).}

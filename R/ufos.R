@@ -96,7 +96,8 @@ ufo_vector <- function(mode, length, populate,
                        finalizer = NULL,
                        read_only = FALSE, chunk_length = 0, ...) {
     compile <- function(f) {
-      ifelse(is.function(f, compiler::cmpfun(f), f))
+      #ifelse(is.function(f), compiler::cmpfun(f), f)
+      f
     }
 
     populate <- compile(populate)
