@@ -156,7 +156,7 @@ impl UfoSystem {
         self.core.shutdown()
     }
 
-    pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
+    pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, reset: Robj, destroy: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
         eprintln!("UfoSystem::new_ufo:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   mode:           {:?}", mode);
@@ -164,6 +164,8 @@ impl UfoSystem {
         eprintln!("   user_data:      {:?}", user_data);
         eprintln!("   populate:       {:?}", populate);
         eprintln!("   writeback:      {:?}", writeback);
+        eprintln!("   reset:          {:?}", reset);
+        eprintln!("   destroy:        {:?}", destroy);
         eprintln!("   finalizer:      {:?}", finalizer);
         eprintln!("   read_only:      {:?}", read_only);
         eprintln!("   chunk_length:   {:?}", chunk_length);
@@ -180,6 +182,14 @@ impl UfoSystem {
         r_bail_if!(writeback.rtype() != Rtype::Function && writeback.rtype() != Rtype::Null => 
                    "Expecting writeback to be a function or NULL, but it is {:?}", writeback.rtype());
         let writeback = writeback.as_function();
+
+        r_bail_if!(reset.rtype() != Rtype::Function && reset.rtype() != Rtype::Null => 
+                   "Expecting reset to be a function or NULL, but it is {:?}", reset.rtype());
+        let reset = reset.as_function();
+
+        r_bail_if!(destroy.rtype() != Rtype::Function && destroy.rtype() != Rtype::Null => 
+                   "Expecting destroy to be a function or NULL, but it is {:?}", destroy.rtype());
+        let destroy = destroy.as_function();
 
         r_bail_if!(finalizer.rtype() != Rtype::Function && finalizer.rtype() != Rtype::Null => 
                    "Expecting finalizer to be a function or NULL, but it is {:?}", finalizer.rtype());
@@ -214,6 +224,20 @@ impl UfoSystem {
                 self.sandbox.register_procedure(serialized_function, data_token, &["start", "end", "data"])
             }).extract_result()?;
 
+        let serialized_reset = reset
+            .map(|function| function.serialize())
+            .extract_result()?;
+        let reset_token = serialized_reset.map(|serialized_function| {
+                self.sandbox.register_procedure(serialized_function, data_token, &[])
+            }).extract_result()?;
+            
+        let serialized_destroy = destroy
+            .map(|function| function.serialize())
+            .extract_result()?;
+        let destroy_token = serialized_destroy.map(|serialized_function| {
+                self.sandbox.register_procedure(serialized_function, data_token, &[])
+            }).extract_result()?;   
+
         let serialized_finalizer = finalizer
             .map(|function| function.serialize())
             .extract_result()?;
@@ -230,6 +254,8 @@ impl UfoSystem {
             requested_size: None,
             populate: populate_token,
             writeback: writeback_token,
+            reset: reset_token,
+            destroy: destroy_token,
             finalizer: finalizer_token,   
             user_data: data_token,         
         }.construct_robj();
@@ -328,6 +354,8 @@ pub struct UfoDefinition {
     requested_size: Option<usize>, // in B - the exact amount of B R is asking for, filled in upon request
     populate: FunctionToken,
     writeback: Option<FunctionToken>,
+    reset: Option<FunctionToken>,
+    destroy: Option<FunctionToken>,
     finalizer: Option<FunctionToken>,
     user_data: DataToken,    
 }
@@ -372,19 +400,23 @@ impl UfoDefinition {
             None
         }).flatten();
 
-        // FIXME writeback, reset and destroy should be different function tokens with different parameters.
-        let ufo_object_params = if let Some(token) = self.writeback {
+        let ufo_object_params = if self.writeback.is_some() || self.reset.is_some() || self.destroy.is_some() {
             let system = self.system.clone();
+            let writeback = self.writeback.clone();
+            let reset = self.reset.clone();
+            let destroy = self.destroy.clone();
+
             let writeback_listener = 
                 move |event: UfoWriteListenerEvent|
                     match event {
                         UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
-                            system.sandbox_writeback(token, start_idx, end_idx, data),
+                            writeback.map(|token| system.sandbox_writeback(token, start_idx, end_idx, data)),
                         UfoWriteListenerEvent::Reset => 
-                            system.sandbox_reset(token),
+                            reset.map(|token| system.sandbox_reset(token)),
                         UfoWriteListenerEvent::UfoWBDestroy => 
-                            system.sandbox_destroy(token)
-                    };
+                            destroy.map(|token| system.sandbox_destroy(token)),
+                    }.unwrap_or(());
+
             UfoObjectParams { 
                 header_size: header_size + allocator_size,
                 stride: self.vector_type.element_size().unwrap(),

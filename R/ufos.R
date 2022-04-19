@@ -78,6 +78,9 @@ ufo_system_shutdown <- jeff_goldbloom;
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -85,14 +88,27 @@ ufo_system_shutdown <- jeff_goldbloom;
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded vector of the specified type and length.
 #' @export
-ufo_vector <- function(mode, length,
-                       populate, writeback = NULL, finalizer = NULL,
-                       user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    system <- ufo_system_get_or_create()
-    system$new_ufo(mode = mode, length = length, user_data = user_data,
+ufo_vector <- function(mode, length, populate, 
+                       writeback = NULL, reset = NULL, destroy = NULL, 
+                       finalizer = NULL,
+                       read_only = FALSE, chunk_length = 0, ...) {
+    compile <- function(f) {
+      ifelse(is.function(f, compiler::cmpfun(f), f))
+    }
+
+    populate <- compile(populate)
+    writeback <- compile(writeback)
+    finalizer <- compile(finalizer)
+    reset <- compile(reset)
+    destroy <- compile(destroy)
+
+    system <- ufo_system_get_or_create()   
+    system$new_ufo(mode = mode, length = length, user_data = list(...),
                    populate = populate, writeback = writeback,
+                   reset = reset, destroy = destroy,
                    finalizer = finalizer, read_only = read_only,
                    chunk_length = chunk_length)
 }
@@ -105,6 +121,9 @@ ufo_vector <- function(mode, length,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -112,14 +131,16 @@ ufo_vector <- function(mode, length,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded integer vector of the specified length.
 #' @export
-ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "integer", length = length, user_data = user_data,
+ufo_integer <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                        read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "integer", length = length,
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 #' Produces a lazily populated UFO numeric vector of the given length.
@@ -130,6 +151,9 @@ ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -139,12 +163,13 @@ ufo_integer <- function(length, populate, writeback = NULL, finalizer = NULL,
 #'                     (optional, a page by default).
 #' @return a lazily loaded numeric vector of the specified length.
 #' @export
-ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "numeric", length = length, user_data = user_data,
+ufo_numeric <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                        read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "numeric", length = length, 
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 #' Produces a lazily populated UFO logical vector of the given length.
@@ -155,6 +180,9 @@ ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -162,14 +190,16 @@ ufo_numeric <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded logical vector of the specified length.
 #' @export
-ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "logical", length = length, user_data = user_data,
+ufo_logical <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                        read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "logical", length = length,
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 #' Produces a lazily populated UFO character vector of the given length.
@@ -180,6 +210,9 @@ ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -187,14 +220,16 @@ ufo_logical <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded character vector of the specified length.
 #' @export
-ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
-                          user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "character", length = length, user_data = user_data,
+ufo_character <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                          read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "character", length = length, 
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 #' Produces a lazily populated UFO complex vector of the given length.
@@ -205,6 +240,9 @@ ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -212,14 +250,16 @@ ufo_character <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded complex vector of the specified length.
 #' @export
-ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
-                        user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "complex", length = length, user_data = user_data,
+ufo_complex <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                        user_data = NULL, read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "complex", length = length, 
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 #' Produces a lazily populated UFO raw vector of the given length.
@@ -230,6 +270,9 @@ ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param populate a function used to generate data inside the vector,
 #' @param writeback a function called when a modified chunk of the vector
 #'                  is garbage collected (optional).
+#' @param reset a function called when a modified chunk is reset discarding
+#'              dirty, manually written values.
+#' @param destroy a function called when a modified chunk is being destroyed
 #' @param finalizer a function called when the entire vector is garbage
 #'                  collected (optional).
 #' @param read_only sets the vector to be write-protected by the OS
@@ -237,14 +280,16 @@ ufo_complex <- function(length, populate, writeback = NULL, finalizer = NULL,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded raw vector of the specified length.
 #' @export
-ufo_raw <- function(length, populate, writeback = NULL, finalizer = NULL,
-                    user_data = NULL, read_only = FALSE, chunk_length = 0) {
-    ufo_vector(mode = "raw", length = length, user_data = user_data,
+ufo_raw <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+                    read_only = FALSE, chunk_length = 0, ...) {
+    ufo_vector(mode = "raw", length = length,
                populate = populate, writeback = writeback,
+               reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
-               chunk_length = chunk_length)
+               chunk_length = chunk_length, ...)
 }
 
 # These are just signatures of various functions used by UFOs, for reference.
@@ -253,16 +298,3 @@ ufo_writeback_prototype <- function(start, end, data, ...) NULL
 ufo_reset_prototype <- function(...) NULL
 ufo_destroy_prototype <- function(...) NULL
 ufo_finalizer_prototype <- function(...) NULL
-
-#' @export
-ufo_call <- compiler::cmpfun(
-  function(user_function, user_data, ...) {
-    print("function")
-    print(user_function)
-    print("data")
-    print(user_data)
-    print("...")
-    print(list(...))
-    do.call(user_function, c(list(...), user_data))
-  }
-)

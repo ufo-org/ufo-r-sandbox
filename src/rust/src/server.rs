@@ -31,7 +31,7 @@ struct Function {
 #[derive(Debug)]
 pub struct Server {
     functions: HashMap<FunctionToken, Function>,
-    objects: HashMap<DataToken, Pairlist>,
+    objects: HashMap<DataToken, List>,
 }
 
 impl Server {
@@ -52,10 +52,10 @@ impl Server {
 
         r_bail_if!(self.objects.contains_key(&token) => 
             "Sandbox server error: Cannot define user data {:?} because it is already defined.", token);        
-        let value: Pairlist = value.deserialize()
+        let value: List = value.deserialize()
             .rewrap(|| format!("Sandbox server error: Cannot define user data {:?}", token))?
-            .as_pairlist()
-            .rewrap(|| format!("Sandbox server error: Cannot define user data {:?}: expecting user data to be a pairlist", token))?;
+            .as_list()
+            .rewrap(|| format!("Sandbox server error: Cannot define user data {:?}: expecting user data to be a list", token))?;
 
         self.objects.insert(token, value);
         Ok(())                
@@ -120,6 +120,9 @@ impl Server {
         let deserialized_arguments = arguments.into_iter()
             .map(|generic| generic.deserialize())
             .collect::<Result<Vec<Robj>>>()?;
+
+        println!("USER_DATA:  {:?}", user_data);
+        println!("PARAMETERS: {:?}", function.parameters);
  
         // Needed to shorten the lifetimes from 'static to '_.
         let user_data = user_data.iter()
