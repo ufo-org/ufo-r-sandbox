@@ -67,7 +67,7 @@ impl Sandbox {
         eprintln!("   return_type:    {:?}", return_type);
 
         let function_blob = function.as_slice();
-        let parameters = parameters.into_iter()
+        let parameters = parameters.iter()
             .map(|parameter| GenericValue::Vstring(parameter.to_owned()));
             // .collect::<VecDeque<GenericValue<&[u8],&str>>>();
         
@@ -93,7 +93,7 @@ impl Sandbox {
         eprintln!("   parameters:     {:?}", parameters);
 
         let function_blob = function.as_slice();
-        let parameters = parameters.into_iter()
+        let parameters = parameters.iter()
             .map(|parameter| GenericValue::Vstring(parameter.to_owned()));
             // .collect::<VecDeque<GenericValue<&[u8],&str>>>();
         

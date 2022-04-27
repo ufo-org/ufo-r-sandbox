@@ -53,7 +53,7 @@ impl UfoType {
             Self::Vector => Rtype::List,
             Self::Raw => Rtype::Raw,
         }
-    }
+    }    
 }
 
 impl TryFrom<&Rtype> for UfoType {
@@ -110,16 +110,7 @@ pub trait UfoTypeChecker {
 
 impl UfoTypeChecker for UfoType {
     fn check_against(&self, object: &Robj) -> bool {
-        match (self, object.rtype()) {
-            (UfoType::Integer, Rtype::Integers) => true,
-            (UfoType::Numeric, Rtype::Doubles) => true,
-            (UfoType::Character, Rtype::Strings) => true,
-            (UfoType::Complex, Rtype::Complexes) => true,
-            (UfoType::Boolean, Rtype::Logicals) => true,
-            (UfoType::Raw, Rtype::Raw) => true,
-            (UfoType::Vector, Rtype::List) => true,
-            _ => false,
-        }
+        matches!((self, object.rtype()), (UfoType::Integer, Rtype::Integers) | (UfoType::Numeric, Rtype::Doubles) | (UfoType::Character, Rtype::Strings) | (UfoType::Complex, Rtype::Complexes) | (UfoType::Boolean, Rtype::Logicals) | (UfoType::Raw, Rtype::Raw) | (UfoType::Vector, Rtype::List))
     }
 }
 

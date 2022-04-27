@@ -37,9 +37,9 @@ const LOW_WATERMARK_DEFAULT: usize  = 10  * 1024 * 1024; //10MB
 
 use std::sync::Arc;
 
-use libR_sys;
+// use libR_sys;
 
-use libc;
+// use libc;
 
 use allocr::*;
 use typer::*;
@@ -83,8 +83,11 @@ impl RUnfriendlyAPI for UfoSystem {
         eprintln!("   pointer         {:?}", pointer);
 
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
+        eprintln!("    waiting...");
         let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during free")?;
+        eprintln!("    freeing...");
         let wait_group = locked_ufo.free().rewrap(|| "Error performing free on UFO")?;
+        eprintln!("    waiting...");
         wait_group.wait();
 
         Ok(())
@@ -156,6 +159,7 @@ impl UfoSystem {
         self.core.shutdown()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, reset: Robj, destroy: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
         eprintln!("UfoSystem::new_ufo:");
         eprintln!("   self:           {:?}", self);
@@ -265,7 +269,9 @@ impl UfoSystem {
 }
 
 impl UfoSystem {
-    pub fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8, return_type: UfoType) -> std::result::Result<(), UfoPopulateError> {
+    /// # Safety
+    /// Function operates on raw pointer to area of memory. The contents are written to from a deserialized byte vector retrieved from sandbox.
+    pub unsafe fn sandbox_populate(&self, token: FunctionToken, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
         eprintln!("UfoSystem::sandbox_populate:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
@@ -280,21 +286,14 @@ impl UfoSystem {
                 UfoPopulateError
             })?;
 
-        let size = result.len() * return_type.element_size();
-        // let deserialized_result = result.deserialize() // FIXME: WE CAN'T DESERIALZIE HERE!!!!!!!!!!!!!!!!!!!!!!!!!
-        //     .map_err(|e| {
-        //         eprintln!("UFO populate error: {}", e);
-        //         UfoPopulateError
-        //     })?;       
+        std::ptr::copy_nonoverlapping(result.as_ptr(), memory, result.len());        
 
-        unsafe {
-            // let data_ptr = libR_sys::DATAPTR(deserialized_result.get()) as *const u8;
-            std::ptr::copy_nonoverlapping(result.as_ptr(), memory, size);
-        }
         Ok(())
     }
 
-    pub fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
+    /// # Safety
+    /// Function operates on raw pointer to area of memory. The contents are serialized and sent to sandbox.
+    pub unsafe fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
         eprintln!("UfoSystem::sandbox_writeback:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
@@ -302,9 +301,7 @@ impl UfoSystem {
         eprintln!("   end:            {:?}", end);
         eprintln!("   memory:         {:?}", memory);
 
-        let data = GenericValue::Vbytes(unsafe {
-            std::slice::from_raw_parts(memory, end - start)
-        });
+        let data = GenericValue::Vbytes(std::slice::from_raw_parts(memory, end - start));
         let start = GenericValue::Vusize(start);
         let end = GenericValue::Vusize(end);
         // let event_type = GenericValue::Vstring("writeback");
@@ -387,30 +384,32 @@ impl UfoDefinition {
         eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
 
         let system = self.system.clone();
-        let token = self.populate.clone();
-        let return_type =  UfoType::try_from(&self.vector_type)?;
+        let token = self.populate;
+        // let return_type =  UfoType::try_from(&self.vector_type)?;
 
         let populate = move |start: usize, end: usize, memory: *mut u8| {
-            system.sandbox_populate(token, start, end, memory, return_type)
+            unsafe { system.sandbox_populate(token, start, end, memory) }
         };
 
-        let min_load_ct = self.chunk_length.map(|elements| if elements != 0 {
+        let min_load_ct = self.chunk_length.and_then(|elements| if elements != 0 {
             self.vector_type.element_size().map(|size| elements * size)
         } else {
             None
-        }).flatten();
+        });
 
         let ufo_object_params = if self.writeback.is_some() || self.reset.is_some() || self.destroy.is_some() {
             let system = self.system.clone();
-            let writeback = self.writeback.clone();
-            let reset = self.reset.clone();
-            let destroy = self.destroy.clone();
+            let writeback = self.writeback;
+            let reset = self.reset;
+            let destroy = self.destroy;
 
             let writeback_listener = 
                 move |event: UfoWriteListenerEvent|
                     match event {
                         UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
-                            writeback.map(|token| system.sandbox_writeback(token, start_idx, end_idx, data)),
+                            writeback.map(|token| unsafe {
+                                system.sandbox_writeback(token, start_idx, end_idx, data)
+                            }),
                         UfoWriteListenerEvent::Reset => 
                             reset.map(|token| system.sandbox_reset(token)),
                         UfoWriteListenerEvent::UfoWBDestroy => 

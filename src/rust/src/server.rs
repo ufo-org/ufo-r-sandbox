@@ -28,7 +28,7 @@ struct Function {
     return_type: Option<UfoType>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Server {
     functions: HashMap<FunctionToken, Function>,
     objects: HashMap<DataToken, List>,
@@ -87,7 +87,7 @@ impl Server {
             .rewrap(|| format!("Sandbox server error: Cannot define function {:?}", token))?;
 
         let return_type = return_type
-            .map(|string| UfoType::try_from(string))
+            .map(UfoType::try_from)
             .extract_result()
             .rewrap(|| format!("Sandbox server error: Cannot define function {:?} because of unknown return type {:?}", token, return_type))?;
         
@@ -142,17 +142,22 @@ impl Server {
         eprintln!("   result:         {:?}", result);
 
         // let serialized_result = result.serialize()?;        
-        // eprintln!("   serialized:     {:?}", serialized_result);        
+        // eprintln!("   serialized:     {:?}", serialized_result);
 
         r_bail_if!(!function.return_type.check_against(&result) => 
-            "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} into vector of expected type {:?}", 
-            token, result, function.return_type);
+            "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} of type {:?} into vector of expected type {:?}", 
+            token, result, result.rtype(), function.return_type);
+
+        eprintln!("x");
 
         let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
+
+        eprintln!("y");
         let slice: &[u8] = unsafe {
             let data_ptr = libR_sys::DATAPTR_RO(result.get());
             std::slice::from_raw_parts(data_ptr as *const u8, size)
         };
+        eprintln!("z");
        
         // Ok(serialized_result)
         Ok(slice)
@@ -190,7 +195,7 @@ impl Server {
                 }
 
                 ProtocolCommand::DefineFunction { token, function_blob: function, associated_data } => {
-                    r_bail_if!(associated_data.len() < 1 => 
+                    r_bail_if!(associated_data.is_empty() => 
                         "Sandbox server error: Cannot define function: expecting at least one associated items (user data token and return type)");
                     let user_data = associated_data[0].expect_token()
                         .rewrap(|| "Sandbox server error: Cannot define function")?;
@@ -199,13 +204,13 @@ impl Server {
                         .extract_result()
                         .rewrap(|| "Sandbox server error: Cannot define function")?;
 
-                    let parameters = associated_data[1..].into_iter()
+                    let parameters = associated_data[1..].iter()
                         .map(|generic| {
                             generic.expect_string()
                                 .rewrap(|| "Sandbox server error: Invalid function parameter")
                                 .map(|s| s.to_owned())
                         }).collect::<Result<VecDeque<String>>>()?;
-                    self.define_function(token, user_data.clone(), function, parameters, return_type)?;
+                    self.define_function(token, *user_data, function, parameters, return_type)?;
                     server.respond_to_define(&[]) // TODO is this the correct function?
                         .rewrap(|| "Sandbox server error: Cannot respond to function definition")?
                 },

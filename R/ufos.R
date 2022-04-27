@@ -1,4 +1,4 @@
-
+# Core, universal, "low-level" UFO objects and functions.
 
 #' A UFO core singleton that is lazily loaded and hangs around until the
 #' package is unloaded.
@@ -91,7 +91,7 @@ ufo_system_shutdown <- jeff_goldbloom;
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded vector of the specified type and length.
 #' @export
-ufo_vector <- function(mode, length, populate, 
+ufo_vector_constructor <- function(mode, length, populate, 
                        writeback = NULL, reset = NULL, destroy = NULL, 
                        finalizer = NULL,
                        read_only = FALSE, chunk_length = 0, ...) {
@@ -137,9 +137,9 @@ ufo_vector <- function(mode, length, populate,
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded integer vector of the specified length.
 #' @export
-ufo_integer <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_integer_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "integer", length = length,
+    ufo_vector_constructor(mode = "integer", length = length,
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -166,9 +166,9 @@ ufo_integer <- function(length, populate, writeback = NULL, reset = NULL, destro
 #'                     (optional, a page by default).
 #' @return a lazily loaded numeric vector of the specified length.
 #' @export
-ufo_numeric <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_numeric_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "numeric", length = length, 
+    ufo_vector_constructor(mode = "numeric", length = length, 
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -196,9 +196,9 @@ ufo_numeric <- function(length, populate, writeback = NULL, reset = NULL, destro
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded logical vector of the specified length.
 #' @export
-ufo_logical <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_logical_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                         read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "logical", length = length,
+    ufo_vector_constructor(mode = "logical", length = length,
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -226,9 +226,9 @@ ufo_logical <- function(length, populate, writeback = NULL, reset = NULL, destro
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded character vector of the specified length.
 #' @export
-ufo_character <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_character_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                           read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "character", length = length, 
+    ufo_vector_constructor(mode = "character", length = length, 
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -256,9 +256,9 @@ ufo_character <- function(length, populate, writeback = NULL, reset = NULL, dest
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded complex vector of the specified length.
 #' @export
-ufo_complex <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_complex_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                         user_data = NULL, read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "complex", length = length, 
+    ufo_vector_constructor(mode = "complex", length = length, 
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -286,9 +286,9 @@ ufo_complex <- function(length, populate, writeback = NULL, reset = NULL, destro
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded raw vector of the specified length.
 #' @export
-ufo_raw <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
+ufo_raw_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
                     read_only = FALSE, chunk_length = 0, ...) {
-    ufo_vector(mode = "raw", length = length,
+    ufo_vector_constructor(mode = "raw", length = length,
                populate = populate, writeback = writeback,
                reset = reset, destroy = destroy,
                finalizer = finalizer, read_only = read_only,
@@ -296,8 +296,8 @@ ufo_raw <- function(length, populate, writeback = NULL, reset = NULL, destroy = 
 }
 
 # These are just signatures of various functions used by UFOs, for reference.
-ufo_populate_prototype <- function(start, end, ...) NULL
-ufo_writeback_prototype <- function(start, end, data, ...) NULL
-ufo_reset_prototype <- function(...) NULL
-ufo_destroy_prototype <- function(...) NULL
-ufo_finalizer_prototype <- function(...) NULL
+.ufo_populate_prototype <- function(start, end, ...) NULL
+.ufo_writeback_prototype <- function(start, end, data, ...) NULL
+.ufo_reset_prototype <- function(...) NULL
+.ufo_destroy_prototype <- function(...) NULL
+.ufo_finalizer_prototype <- function(...) NULL
