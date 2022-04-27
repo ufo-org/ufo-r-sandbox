@@ -409,17 +409,24 @@ impl UfoDefinition {
             let destroy = self.destroy;
 
             let writeback_listener = 
-                move |event: UfoWriteListenerEvent|
+                move |event: UfoWriteListenerEvent| {
+                    eprintln!("DOING WRITEBACK THINGS NAO!!!");
                     match event {
                         UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
                             writeback.map(|token| unsafe {
+                                eprintln!("wb");
                                 system.sandbox_writeback(token, start_idx, end_idx, data)
                             }),
-                        UfoWriteListenerEvent::Reset => 
-                            reset.map(|token| system.sandbox_reset(token)),
-                        UfoWriteListenerEvent::UfoWBDestroy => 
-                            destroy.map(|token| system.sandbox_destroy(token)),
-                    }.unwrap_or(());
+                        UfoWriteListenerEvent::Reset =>  {
+                            eprintln!("reset");
+                            reset.map(|token| system.sandbox_reset(token))
+                        }
+                        UfoWriteListenerEvent::UfoWBDestroy => {
+                            eprintln!("destroy");
+                            destroy.map(|token| system.sandbox_destroy(token))
+                        }
+                    }.unwrap_or(())
+                };
 
             UfoObjectParams { 
                 header_size: header_size + allocator_size,
