@@ -83,11 +83,12 @@ impl RUnfriendlyAPI for UfoSystem {
         eprintln!("   pointer         {:?}", pointer);
 
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
-        eprintln!("    waiting...");
-        let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during free")?;
-        eprintln!("    freeing...");
+        let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during free")?;        
         let wait_group = locked_ufo.free().rewrap(|| "Error performing free on UFO")?;
-        eprintln!("    waiting...");
+
+        // If lock is not dropped before wait_group.wait(), there's a deadlock.
+        std::mem::drop(locked_ufo);
+        
         wait_group.wait();
 
         Ok(())
@@ -155,8 +156,12 @@ impl UfoSystem {
         eprintln!("UfoSystem::shutdown:");
         eprintln!("   self:           {:?}", self);
 
-        eprintln!("Ufo core is shutting down...");
+        eprintln!("Ufo sandbox is shuttind down...");
+        self.sandbox.shutdown().unwrap();
+
+        eprintln!("Ufo core is shutting down...");       
         self.core.shutdown()
+
     }
 
     #[allow(clippy::too_many_arguments)]

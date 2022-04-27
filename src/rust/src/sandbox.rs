@@ -43,7 +43,7 @@ impl Sandbox {
         eprintln!("Sandbox::start");
 
         let child = Command::new("R")
-            .args(&["--vanilla", "--no-restore", "-e", "ufosandbox:::start_sandbox()"])
+            .args(&["--vanilla", "--quiet", "-e", "ufosandbox:::start_sandbox()"])
             .start_subordinate_process()
             .map_err(|e| r_error!("Cannot start sandbox: {}", e))?;        
 
@@ -53,6 +53,7 @@ impl Sandbox {
     pub fn shutdown(&self) -> Result<()> {
         eprintln!("Sandbox::shutdown:");
         eprintln!("   self:           {:?}", self);
+        eprintln!("    pid:           {:?}", std::process::id());
 
         self.lock()?.shutdown(&[])
             .map_err(|e| r_error!("Cannot shutdown sandbox: {}", e))
@@ -185,6 +186,6 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        self.shutdown().unwrap()
+        // self.shutdown().unwrap()
     }
 }

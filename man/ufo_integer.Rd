@@ -4,7 +4,7 @@
 \alias{ufo_integer}
 \title{Creates a UFO object of type \code{integer}}
 \usage{
-ufo_integer(length = 0, initial_value = as.integer(0), ...)
+ufo_integer(length = 0, initial_value = 0, ...)
 }
 \arguments{
 \item{length}{the length fo the ufo integer vector, has to be larger than 1}

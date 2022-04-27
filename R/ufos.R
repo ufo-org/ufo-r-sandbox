@@ -1,9 +1,5 @@
 # Core, universal, "low-level" UFO objects and functions.
 
-#' A UFO core singleton that is lazily loaded and hangs around until the
-#' package is unloaded.
-.ufo_core <- NULL
-
 #' Get a reference to the UFO core.
 #' @param writeback_path location of directory where UFOs write modified
 #'                       dematerialized data
@@ -11,12 +7,10 @@
 #' @param low_water_mark size of materialized UFO chunks after GC (in MB)
 #' @return An external pointer object with functions attached.
 #' @export
-ufo_system_get_or_create <-
-function(writeback_path, high_water_mark, low_water_mark) {
+ufo_system_start <-
+  function(writeback_path, high_water_mark, low_water_mark) {
 
-  if (!is.null(.ufo_core)) {
-    return(.ufo_core)
-  }
+  cat("UFO_SYSTEM_GET_OR_CREATE\n");
 
   directory <- if (missing(writeback_path)) {
     getOption("ufos.writeback_path", default = "/tmp")
@@ -36,19 +30,20 @@ function(writeback_path, high_water_mark, low_water_mark) {
     low_water_mark
   }
 
-  .ufo_core <- UfoSystem$initialize(
+  UfoSystem$initialize(
     as.character(directory),
     as.integer(high_water_mark_mb * 1024 * 1024),
     as.integer(low_water_mark_mb * 1024 * 1024)
   )
 }
 
+#' A UFO core singleton that is lazily loaded and hangs around until the
+#' package is unloaded.
+.ufo_core <- onet(initializer = ufo_system_start)
+
 #' Kills UFO core. I refuse to rename it.
 jeff_goldbloom <- function(...) {
-  if (!is.null(.ufo_core)) {
-    .ufo_core$shutdown()
-    .ufo_core <- NULL
-  }
+  destroy(.ufo_core)
   invisible(NULL)
 }
 
@@ -108,7 +103,7 @@ ufo_vector_constructor <- function(mode, length, populate,
     # reset <- compile(reset)
     # destroy <- compile(destroy)
 
-    system <- ufo_system_get_or_create()
+    system <- get_or_create(.ufo_core)
     system$new_ufo(mode = mode, length = length, user_data = list(...),
                    populate = populate, writeback = writeback,
                    reset = reset, destroy = destroy,
