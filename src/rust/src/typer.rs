@@ -47,17 +47,7 @@ impl RtypeTools for Rtype {
     }
 
     fn is_vector(&self) -> bool {
-        match self {
-            Rtype::Rstr => true,
-            Rtype::Logicals => true,
-            Rtype::Integers => true,
-            Rtype::Doubles => true,
-            Rtype::Complexes => true,
-            Rtype::Strings => true,
-            Rtype::List => true,
-            Rtype::Raw => true,
-            _ => false,
-        }
+        matches!(self, Rtype::Rstr | Rtype::Logicals | Rtype::Integers | Rtype::Doubles | Rtype::Complexes | Rtype::Strings | Rtype::List | Rtype::Raw)
     }
 
     fn as_sxp(&self) -> i32 {
@@ -80,7 +70,7 @@ impl RtypeTools for Rtype {
 }
 
 trait IntoGenericRefVector{
-    fn serialize_into_generic_ref_vector<'a>(&'a self) -> Result<Vec<GenericValueRef<'a>>>;
+    fn serialize_into_generic_ref_vector(&'_ self) -> Result<Vec<GenericValueRef<'_>>>;
 }
 
 // impl IntoGenericRefVector for Rbool {
@@ -91,7 +81,7 @@ trait IntoGenericRefVector{
 // }
 
 impl IntoGenericRefVector for Robj{
-    fn serialize_into_generic_ref_vector<'a>(&'a self) -> Result<Vec<GenericValueRef<'a>>> {
+    fn serialize_into_generic_ref_vector(&'_ self) -> Result<Vec<GenericValueRef<'_>>> {
         match self.rtype() {
             Rtype::Rstr => {
                 todo!()
@@ -99,7 +89,7 @@ impl IntoGenericRefVector for Robj{
             Rtype::Logicals => {
                 let vector = self.as_raw_slice()
                     .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
-                    .into_iter()
+                    .iter()
                     .map(|value| GenericValueRef::Vu8(*value))
                     .collect();
 
@@ -109,7 +99,7 @@ impl IntoGenericRefVector for Robj{
                 let vector = self.as_integer_vector()
                     .rewrap(|| format!("Cannot represent vector of type {:?} as integers", self))?
                     .into_iter()
-                    .map(|value| GenericValueRef::Vi32(value))
+                    .map(GenericValueRef::Vi32)
                     .collect();
 
                 Ok(vector)
@@ -128,7 +118,7 @@ impl IntoGenericRefVector for Robj{
             Rtype::Strings => {
                 let vector = self.as_str_iter()
                     .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
-                    .map(|value| GenericValueRef::Vstring(value))
+                    .map(GenericValueRef::Vstring)
                     .collect();
 
                 Ok(vector)
@@ -139,7 +129,7 @@ impl IntoGenericRefVector for Robj{
             Rtype::Raw => {
                 let vector = self.as_raw_slice()
                     .rewrap(|| format!("Cannot represent vector of type {:?} as raw bytes", self))?
-                    .into_iter()
+                    .iter()
                     .map(|value| GenericValueRef::Vu8(*value))
                     .collect();
 

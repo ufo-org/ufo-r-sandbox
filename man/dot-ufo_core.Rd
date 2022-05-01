@@ -6,7 +6,7 @@
 \title{A UFO core singleton that is lazily loaded and hangs around until the
 package is unloaded.}
 \format{
-An object of class \code{NULL} of length 0.
+An object of class \code{onet} of length 2.
 }
 \usage{
 .ufo_core

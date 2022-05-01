@@ -43,7 +43,7 @@ impl Sandbox {
         eprintln!("Sandbox::start");
 
         let child = Command::new("R")
-            .args(&["--vanilla", "--no-restore", "-e", "ufosandbox:::start_sandbox()"])
+            .args(&["--vanilla", "--quiet", "-e", "ufosandbox:::start_sandbox()"])
             .start_subordinate_process()
             .map_err(|e| r_error!("Cannot start sandbox: {}", e))?;        
 
@@ -53,6 +53,7 @@ impl Sandbox {
     pub fn shutdown(&self) -> Result<()> {
         eprintln!("Sandbox::shutdown:");
         eprintln!("   self:           {:?}", self);
+        eprintln!("    pid:           {:?}", std::process::id());
 
         self.lock()?.shutdown(&[])
             .map_err(|e| r_error!("Cannot shutdown sandbox: {}", e))
@@ -67,7 +68,7 @@ impl Sandbox {
         eprintln!("   return_type:    {:?}", return_type);
 
         let function_blob = function.as_slice();
-        let parameters = parameters.into_iter()
+        let parameters = parameters.iter()
             .map(|parameter| GenericValue::Vstring(parameter.to_owned()));
             // .collect::<VecDeque<GenericValue<&[u8],&str>>>();
         
@@ -93,7 +94,7 @@ impl Sandbox {
         eprintln!("   parameters:     {:?}", parameters);
 
         let function_blob = function.as_slice();
-        let parameters = parameters.into_iter()
+        let parameters = parameters.iter()
             .map(|parameter| GenericValue::Vstring(parameter.to_owned()));
             // .collect::<VecDeque<GenericValue<&[u8],&str>>>();
         
@@ -185,6 +186,6 @@ impl Sandbox {
 
 impl Drop for Sandbox {
     fn drop(&mut self) {
-        self.shutdown().unwrap()
+        // self.shutdown().unwrap()
     }
 }

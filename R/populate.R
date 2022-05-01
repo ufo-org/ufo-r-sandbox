@@ -1,35 +1,29 @@
 # user_data <- list(from=0, by=1, to=20);
 populate_integer_seq <- function(start, end, from, by, ...) {
-    seq.int(
+    as.integer(seq.int(
         from = from + (start - 1) * by,
         to   = from + (end   - 1) * by,
         by   = by
-    )
+    ))
 }
 
+# int_seq = ufo_integer(populate=populate_integer_seq, length=10, from=2, by=2)
 # user_data <- list(from=0, by=1, to=20);
 populate_numeric_seq <- function(start, end, from, by, ...) {
-    seq(
+    as.numeric(seq.int(
         from = from + (start - 1) * by,
         to   = from + (end   - 1) * by,
         by   = by
-    )
+    ))
 }
 
-populate_integer <- function(start, end, size, ...) {
-    integer(size)
-}
-
-populate_numeric <- function(start, end, size, ...) {
-    numeric(size)
-}
 
 populate_integer_bin <- function(start, end, path, ...) {
     source <- file(path, open="rb", raw=FALSE)
     seek(source, origin="start", where=start)
     vector <- readBin(source, what="integer", n=end-start)
     close(source)
-    vector
+    as.integer(vector)
 }
 
 populate_numeric_bin <- function(start, end, path, ...) {
@@ -37,7 +31,7 @@ populate_numeric_bin <- function(start, end, path, ...) {
     seek(source, origin="start", where=start)
     vector <- readBin(source, what="numeric", n=end-start)
     close(source)
-    vector
+    as.numeric(vector)
 }
 
 populate_psql <- function(start, end, user, host, port, database, table, column, ...) { # TODO: open connection beforehand
