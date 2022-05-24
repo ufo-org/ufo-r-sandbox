@@ -43,6 +43,10 @@ will always be rounded up to a full memory page
 (optional, a page by default).}
 
 \item{...}{user data passed to populate, writeback, and finalizer functions,}
+
+\item{add_class}{a logical value determining whether to add a \code{ufo} class
+to this vector. If not specified, checks
+\code{getOption("ufos.add_class")}. True by default.}
 }
 \value{
 a lazily loaded character vector of the specified length.

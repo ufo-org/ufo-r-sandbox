@@ -47,9 +47,10 @@ impl From<UfoDefinition> for CustomAllocator {
 
 extern fn ufo_alloc(allocator: *mut CustomAllocator, size: libc::size_t) -> *mut libc::c_void {
     let definition: &mut UfoDefinition = unsafe { &mut *(*allocator).data.cast() }; 
-    definition.requested_size = Some(size as usize);
+    definition.requested_size = Some(size as usize);    
     let prototype = try_or_null!(definition.prototype());
-    try_or_null!(definition.system.create_ufo(prototype))    
+    let new_ufo = try_or_null!(definition.system.create_ufo(prototype));
+    new_ufo
 }
 
 extern fn ufo_free(allocator: *mut CustomAllocator, pointer: *mut libc::c_void) {

@@ -10,8 +10,6 @@
 ufo_system_start <-
   function(writeback_path, high_water_mark, low_water_mark) {
 
-  cat("UFO_SYSTEM_GET_OR_CREATE\n");
-
   directory <- if (missing(writeback_path)) {
     getOption("ufos.writeback_path", default = "/tmp")
   } else {
@@ -83,13 +81,16 @@ ufo_system_shutdown <- jeff_goldbloom;
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded vector of the specified type and length.
 #' @export
-ufo_vector_constructor <- function(mode, length, populate, 
-                       writeback = NULL, reset = NULL, destroy = NULL, 
+ufo_vector_constructor <- function(mode, length, populate,
+                       writeback = NULL, reset = NULL, destroy = NULL,
                        finalizer = NULL,
-                       read_only = FALSE, chunk_length = 0, ...) {
+                       read_only = FALSE, chunk_length = 0, add_class, ...) {
     # compile <- function(f)
     #   if (is.function(f)) {
     #     compiler::cmpfun(f)
@@ -104,11 +105,19 @@ ufo_vector_constructor <- function(mode, length, populate,
     # destroy <- compile(destroy)
 
     system <- get_or_create(.ufo_core)
-    system$new_ufo(mode = mode, length = length, user_data = list(...),
-                   populate = populate, writeback = writeback,
-                   reset = reset, destroy = destroy,
-                   finalizer = finalizer, read_only = read_only,
-                   chunk_length = chunk_length)
+    vector<-system$new_ufo(mode = mode, length = length,
+                             user_data = list(...),
+                             populate = populate, writeback = writeback,
+                             reset = reset, destroy = destroy,
+                             finalizer = finalizer, read_only = read_only,
+                             chunk_length = chunk_length)
+    print("WTF")
+
+    if ((missing(add_class) && isTRUE(getOption("ufos.add_class", TRUE)))
+       || (!missing(add_class) && isTRUE(add_class))) {
+      class(vector) <- "ufo"
+    }
+    vector
 }
 
 #' Produces a lazily populated UFO integer vector of the given length.
@@ -129,6 +138,9 @@ ufo_vector_constructor <- function(mode, length, populate,
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded integer vector of the specified length.
 #' @export
@@ -159,6 +171,9 @@ ufo_integer_constructor <- function(length, populate, writeback = NULL, reset = 
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @return a lazily loaded numeric vector of the specified length.
 #' @export
 ufo_numeric_constructor <- function(length, populate, writeback = NULL, reset = NULL, destroy = NULL, finalizer = NULL,
@@ -188,6 +203,9 @@ ufo_numeric_constructor <- function(length, populate, writeback = NULL, reset = 
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded logical vector of the specified length.
 #' @export
@@ -218,6 +236,9 @@ ufo_logical_constructor <- function(length, populate, writeback = NULL, reset = 
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded character vector of the specified length.
 #' @export
@@ -248,6 +269,9 @@ ufo_character_constructor <- function(length, populate, writeback = NULL, reset 
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded complex vector of the specified length.
 #' @export
@@ -278,6 +302,9 @@ ufo_complex_constructor <- function(length, populate, writeback = NULL, reset = 
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
+#' @param add_class a logical value determining whether to add a `ufo` class
+#'                  to this vector. If not specified, checks
+#'                  `getOption("ufos.add_class")`. True by default.
 #' @param ... user data passed to populate, writeback, and finalizer functions,
 #' @return a lazily loaded raw vector of the specified length.
 #' @export

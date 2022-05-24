@@ -41,6 +41,10 @@ collected (optional).}
 \item{chunk_length}{the minimum number of elements loaded at once,
 will always be rounded up to a full memory page
 (optional, a page by default).}
+
+\item{add_class}{a logical value determining whether to add a \code{ufo} class
+to this vector. If not specified, checks
+\code{getOption("ufos.add_class")}. True by default.}
 }
 \value{
 a lazily loaded numeric vector of the specified length.

@@ -8,6 +8,7 @@ use std::sync::MutexGuard;
 use itertools::Itertools;
 
 use ufo_ipc;
+use ufo_ipc::GenericValueBoxed;
 // use ufo_ipc::GenericValueRef;
 use ufo_ipc::StartSubordinateProcess;
 use ufo_ipc::ControllerProcess;
@@ -44,6 +45,7 @@ impl Sandbox {
 
         let child = Command::new("R")
             .args(&["--vanilla", "--quiet", "-e", "ufosandbox:::start_sandbox()"])
+            .env("RUST_BACKTRACE", "1")
             .start_subordinate_process()
             .map_err(|e| r_error!("Cannot start sandbox: {}", e))?;        
 
@@ -124,7 +126,7 @@ impl Sandbox {
         Ok(data_token)
     }
 
-    pub fn call_function(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<Vec<u8>> {
+    pub fn call_function(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<Vec<GenericValueBoxed>> {
         eprintln!("Sandbox::call_function:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   function_token: {:?}", function_token);
@@ -135,12 +137,12 @@ impl Sandbox {
             .map_err(|e| r_error!("Cannot call function {:?} in sandbox: {}", function_token, e))?
             .value;
 
-        let bytes = result.into_iter().exactly_one()
-            .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?
-            .expect_bytes_into()
-            .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
+        // let bytes = result.into_iter().exactly_one()
+        //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?
+        //     .expect_bytes_into()
+        //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
 
-        Ok(bytes)
+        Ok(result)
     }
 
     pub fn call_procedure(&self, function_token: FunctionToken, arguments: &[GenericValue<&[u8], &str>]) -> Result<()> {

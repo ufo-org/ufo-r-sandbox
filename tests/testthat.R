@@ -1,4 +1,6 @@
 library(testthat)
 library(ufosandbox)
 
-test_check("ufosandbox")
+options(warn=1)
+
+test_check("ufosandbox", reporter = SummaryReporter$new())

@@ -1,21 +1,3 @@
-# user_data <- list(from=0, by=1, to=20);
-populate_integer_seq <- function(start, end, from, by, ...) {
-    as.integer(seq.int(
-        from = from + (start - 1) * by,
-        to   = from + (end   - 1) * by,
-        by   = by
-    ))
-}
-
-# int_seq = ufo_integer(populate=populate_integer_seq, length=10, from=2, by=2)
-# user_data <- list(from=0, by=1, to=20);
-populate_numeric_seq <- function(start, end, from, by, ...) {
-    as.numeric(seq.int(
-        from = from + (start - 1) * by,
-        to   = from + (end   - 1) * by,
-        by   = by
-    ))
-}
 
 
 populate_integer_bin <- function(start, end, path, ...) {

@@ -1,6 +1,11 @@
 use std::mem::size_of;
 
 use extendr_api::prelude::*;
+use itertools::Itertools;
+use libR_sys::Rf_mkChar;
+use ufo_ipc::{GenericValueBoxed, UnexpectedGenericType};
+
+use crate::{serder::DeserdeR, errors::IntoServerError, r_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UfoType {
@@ -53,7 +58,79 @@ impl UfoType {
             Self::Vector => Rtype::List,
             Self::Raw => Rtype::Raw,
         }
+    }
+
+    pub fn convert_to_data(&self, result: Vec<GenericValueBoxed>) -> Result<Vec<u8>> {
+        match self {
+            UfoType::Integer | 
+            UfoType::Numeric | 
+            UfoType::Complex | 
+            UfoType::Boolean | 
+            UfoType::Raw       => {
+                let bytes = result.into_iter().exactly_one()
+                    .map_err(|e| r_error!("Expecting a function returning {} to send back a single byte vector as response", self))?
+                    .expect_bytes_into()
+                    .map_err(|e| r_error!("Expecting a function returning {} to send back a byte vector as response", self))?;
+                Ok(bytes)
+            }
+            UfoType::Character => self.convert_strings_to_data(result),
+            UfoType::Vector    => todo!(),
+        }
     }    
+
+    fn convert_strings_to_data(&self, result: Vec<GenericValueBoxed>) -> Result<Vec<u8>> {
+        // The types *const T, &T, Box<T>, Option<&T>, and Option<Box<T>> all
+        // have the same size. If T is Sized, all of those types have the same
+        // size as usize.
+        // let element_count = size / std::mem::size_of::<usize>();
+        // let strings = result.deserialize_into(Rtype::Strings)?.as_str_iter()
+        //     .rewrap(|| "Cannot cast result into String of vectors, even though expecting a vector")?;
+
+        let strings = result.into_iter()
+            .map(|v| v.expect_string_into())
+            .collect::<std::result::Result<Vec<String>, UnexpectedGenericType>>()
+            .rewrap(|| r_error!("Expecting a function returning {} to send back a vector of strings", self))?;
+        
+        let bytes: Vec<u8> = strings.into_iter().flat_map(|string| {
+            println!("str: {:?}", string);
+            let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
+            // let character_vector = unsafe { r!(string).get() };
+            println!("character_vector: {:?}", character_vector);
+            let ne_bytes = (character_vector as usize).to_ne_bytes();
+            println!("character_vector as ne_bytes: {:?}", ne_bytes);
+            ne_bytes
+        }).collect();
+
+        Ok(bytes)
+    }
+
+    pub fn pack_for_transport(&self, result: Robj) -> Result<Vec<GenericValueBoxed>> {
+        match self {
+            UfoType::Integer |
+            UfoType::Numeric |
+            UfoType::Complex |
+            UfoType::Boolean |
+            UfoType::Raw       => {
+                let size: usize = result.len() * self.element_size();
+                let slice: &[u8] = unsafe {
+                    let data_ptr = libR_sys::DATAPTR_RO(result.get());
+                    std::slice::from_raw_parts(data_ptr as *const u8, size)
+                };
+                let vector = Vec::from(slice);
+                Ok(vec![GenericValueBoxed::Vbytes(vector)])
+            }
+            UfoType::Character => self.pack_strings_for_transport(result),
+            UfoType::Vector    => todo!(),
+        }
+    }
+
+    pub fn pack_strings_for_transport(&self, result: Robj) -> Result<Vec<GenericValueBoxed>> {
+        let strings: Vec<GenericValueBoxed> = result.as_str_iter()
+            .rewrap(|| r_error!("A function returning {} was unable to construct a string iterator", self))?
+            .map(|s| GenericValueBoxed::Vstring(s.to_owned()))
+            .collect();
+        Ok(strings)
+    }
 }
 
 impl TryFrom<&Rtype> for UfoType {
@@ -82,7 +159,7 @@ impl TryFrom<&str> for UfoType {
             "numeric" | "double" => Ok(Self::Numeric),
             "character" => Ok(Self::Character),
             "complex" => Ok(Self::Complex),
-            "boolean" => Ok(Self::Boolean),
+            "boolean" | "logical" => Ok(Self::Boolean),
             "vector" => Ok(Self::Vector),
             "raw" => Ok(Self::Raw),
             t => Err(Error::Other(format!("Expected integer, numeric, character, complex, or boolean, but found {}", t)))
@@ -123,3 +200,4 @@ impl UfoTypeChecker for Option<UfoType> {
         }
     }
 }
+

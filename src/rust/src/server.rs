@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 
 use itertools::Itertools;
 
-use ufo_ipc::{self, GenericValueRef, ProtocolCommand};
+use ufo_ipc::{self, GenericValueRef, ProtocolCommand, GenericValueBoxed};
 // use ufo_ipc::StartSubordinateProcess;
 // use ufo_ipc::ControllerProcess;
 use ufo_ipc::GenericValue;
@@ -98,7 +98,7 @@ impl Server {
         Ok(())
     }
 
-    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<&[u8]> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
+    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<Vec<GenericValueBoxed>> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
         eprintln!("Server::call_function:");
         eprintln!("   self:           {:?}", self);
         eprintln!("   token:          {:?}", token);
@@ -148,19 +148,20 @@ impl Server {
             "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} of type {:?} into vector of expected type {:?}", 
             token, result, result.rtype(), function.return_type);
 
-        eprintln!("x");
+        let result = function.return_type
+            .map(|ty| ty.pack_for_transport(result))
+            .unwrap_or_else(|| Ok(Vec::new()));
 
-        let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
+        //let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
+        // let slice: &[u8] = unsafe {
+        //     let data_ptr = libR_sys::DATAPTR_RO(result.get());
+        //     std::slice::from_raw_parts(data_ptr as *const u8, size)
+        // };
 
-        eprintln!("y");
-        let slice: &[u8] = unsafe {
-            let data_ptr = libR_sys::DATAPTR_RO(result.get());
-            std::slice::from_raw_parts(data_ptr as *const u8, size)
-        };
-        eprintln!("z");
+        eprintln!("SENDING BACK RESULT :: {:?}", result);
        
         // Ok(serialized_result)
-        Ok(slice)
+        result
     }
 
     fn free_function(&mut self, token: FunctionToken) -> Result<()> {
@@ -216,9 +217,9 @@ impl Server {
                 },
 
                 ProtocolCommand::Call { token, args } => {
-                    let result = self.call_function(token, args)?;
-                    let generic = GenericValueRef::Vbytes(result);
-                    server.respond_to_call(&[generic], &[])
+                    let result: Vec<GenericValueBoxed> = self.call_function(token, args)?;
+                    let result:Vec<GenericValueRef> = result.iter().map(|e| GenericValueRef::from(e)).collect();
+                    server.respond_to_call(result.as_slice(), &[])
                         .rewrap(|| "Sandbox server error: Cannot respond to function call")?;
                 },
 
