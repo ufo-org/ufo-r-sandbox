@@ -5,7 +5,7 @@ use itertools::Itertools;
 use libR_sys::Rf_mkChar;
 use ufo_ipc::{GenericValueBoxed, UnexpectedGenericType};
 
-use crate::{serder::DeserdeR, errors::IntoServerError, r_error};
+use crate::{serder::DeserdeR, errors::IntoServerError, r_error, r_bail_if};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UfoType {
@@ -91,8 +91,10 @@ impl UfoType {
             .collect::<std::result::Result<Vec<String>, UnexpectedGenericType>>()
             .rewrap(|| r_error!("Expecting a function returning {} to send back a vector of strings", self))?;
         
+        r_bail_if!(unsafe { libR_sys::R_gc_running() == 1 } => "Cannot allocate character vectors when the GC is running.");
+
         let bytes: Vec<u8> = strings.into_iter().flat_map(|string| {
-            println!("str: {:?}", string);
+            println!("str: {:?}", string);   
             let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
             // let character_vector = unsafe { r!(string).get() };
             println!("character_vector: {:?}", character_vector);
