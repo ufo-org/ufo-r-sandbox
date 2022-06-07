@@ -213,6 +213,15 @@ new_tokenizer <- function(path, initial_offset, token_buffer_size, character_buf
     tokenizer
 }
 
+new_tokenizer_from_scan_info <- function(scan_info, initial_offset) {
+    new_tokenizer(
+        path = attributes(scan_info)$path,
+        token_buffer_size = attributes(scan_info)$token_buffer_size,
+        character_buffer_size = attributes(scan_info)$character_buffer_size,
+        initial_offset = initial_offset
+    )
+}
+
 transition <- function(state, next_state) {
     state$state = next_state
     state$current_offset = state$current_offset + 1
@@ -234,12 +243,12 @@ append_value <- function(state, value) {
     append_value_token_buffer(state$token_buffer, charToRaw(value))
 }
 
-TOKENIZER_RESULT      <- as.factor(c("OK", "END OF ROW", "END OF FILE", "PARSE ERROR", "ERROR"))
-TOKENIZER_OK          <- TOKENIZER_RESULT[1]
-TOKENIZER_END_OF_ROW  <- TOKENIZER_RESULT[2]
-TOKENIZER_END_OF_FILE <- TOKENIZER_RESULT[3]
-TOKENIZER_PARSE_ERROR <- TOKENIZER_RESULT[4]
-TOKENIZER_ERROR       <- TOKENIZER_RESULT[5]
+#TOKENIZER_RESULT      <- as.factor(c("OK", "END OF ROW", "END OF FILE", "PARSE ERROR", "ERROR"))
+TOKENIZER_OK          <- as.integer(1) #TOKENIZER_RESULT[1]
+TOKENIZER_END_OF_ROW  <- as.integer(2) #TOKENIZER_RESULT[2]
+TOKENIZER_END_OF_FILE <- as.integer(3) #TOKENIZER_RESULT[3]
+# TOKENIZER_PARSE_ERROR <- TOKENIZER_RESULT[4]
+# TOKENIZER_ERROR       <- TOKENIZER_RESULT[5]
 
 pop_token_with_status <- function(state, status, skip) {
     list(
@@ -329,10 +338,12 @@ next_token <- function(tokenizer, skip = FALSE) {
 
             if (is.null(char)) {
                 transition(state, TOKENIZER_CRASHED)
-                return(list(
-                    status = TOKENIZER_PARSE_ERROR,
-                    token = pop_token_or_skip(state, skip = skip)
-                ))
+                stop("Tokenizer encountered the end of file",
+                     " while parsing a quoted field")
+                # return(list(
+                #     status = TOKENIZER_PARSE_ERROR,
+                #     token = pop_token_or_skip(state, skip = skip)
+                # ))
             }
             if(is_quote_escape(tokenizer, char)) {
                 transition(state, TOKENIZER_QUOTE)
@@ -354,10 +365,12 @@ next_token <- function(tokenizer, skip = FALSE) {
 
             if (is.null(char)) {
                 transition(state, TOKENIZER_CRASHED)
-                return(list(
-                    status = TOKENIZER_PARSE_ERROR,
-                    token = pop_token_or_skip(state, skip = skip)
-                ))
+                stop("Tokenizer encountered the end of file",
+                     " while parsing an escaped quote")
+                # return(list(
+                #     status = TOKENIZER_PARSE_ERROR,
+                #     token = pop_token_or_skip(state, skip = skip)
+                # ))
             }
             if (char == tokenizer$quote) {
                 transition(state, TOKENIZER_QUOTED_FIELD)
@@ -385,10 +398,12 @@ next_token <- function(tokenizer, skip = FALSE) {
             }
             { # char is any other character
                 transition(state, TOKENIZER_CRASHED)
-                return(list(
-                    status = TOKENIZER_PARSE_ERROR,
-                    token = pop_token_or_skip(state, skip = skip)
-                ))
+                stop("Tokenizer encountered invalid character ", char, 
+                     " while parsing an escaped quote")
+                # return(list(
+                #     status = TOKENIZER_PARSE_ERROR,
+                #     token = pop_token_or_skip(state, skip = skip)
+                # ))
             }
         },
         TOKENIZER_TRAILING = {
@@ -422,10 +437,12 @@ next_token <- function(tokenizer, skip = FALSE) {
             }
             { # char is any other character
                 transition(state, TOKENIZER_CRASHED)
-                return(list(
-                    status = TOKENIZER_PARSE_ERROR,
-                    token = pop_token_or_skip(state, skip = skip)
-                ))
+                stop("Tokenizer encountered invalid character ", char,
+                     " while parsing trailing characters after a field")
+                # return(list(
+                #     status = TOKENIZER_PARSE_ERROR,
+                #     token = pop_token_or_skip(state, skip = skip)
+                # ))
             }
         },
         TOKENIZER_ESCAPE = {
@@ -451,10 +468,10 @@ next_token <- function(tokenizer, skip = FALSE) {
             }
         },
         TOKENIZER_FINAL = {
-            stop("Error: Tokenizer completed reading this file")
+            stop("Tokenizer already completed reading this file and cannot continue")
         },
         TOKENIZER_CRASHED = {
-            stop("Error: Tokenizer crashed and cannot continue")
+            stop("Tokenizer crashed and cannot continue")
         }
     ) # switch
 } # function
@@ -463,8 +480,8 @@ is_whitespace <- function(char) char == ' ' || char == '\t'
 is_escape <- function(tokenizer, char) char == tokenizer$escape && tokenizer$use_escape_character
 is_quote_escape <- function(tokenizer, char) char == tokenizer$quote && tokenizer$use_double_quote_escape
 
-is_final_state <- function(result) result$status == TOKENIZER_END_OF_FILE || result$status == TOKENIZER_ERROR || result$status == TOKENIZER_PARSE_ERROR
-is_error_state <- function(result) result$status == TOKENIZER_ERROR || result$status == TOKENIZER_PARSE_ERROR
+is_final_state <- function(result) result$status == TOKENIZER_END_OF_FILE # || result$status == TOKENIZER_ERROR || result$status == TOKENIZER_PARSE_ERROR
+# is_error_state <- function(result) result$status == TOKENIZER_ERROR || result$status == TOKENIZER_PARSE_ERROR
 
 test <- function() {
     tokenizer <- new_tokenizer("test.csv", 0, 100, 100)
@@ -478,7 +495,6 @@ test <- function() {
             break
         }
     }
-
     tokens
 }
 
@@ -527,19 +543,253 @@ offset_closest_to_this_row <- function(record, row_index) {
     )
 }
 
-#' @export 
-ufo_csv_scan <-  function(path, initial_offset, token_buffer_size, character_buffer_size) {
-    tokenizer <- new_tokenizer(path, initial_offset, token_buffer_size, character_buffer_size)
+# Token types
+TOKEN_EMPTY      <- 0
+TOKEN_NA         <- 2
+TOKEN_LOGICAL    <- 4
+TOKEN_INTEGER    <- 8
+TOKEN_NUMERIC    <- 16
+TOKEN_CHARACTER  <- 32
 
-}
+to_typed_token <- function(token) {
+    # Assuming we got a legal string of len 1, otherwise: 
+    # is.null(token) || is.na(token) || length(token) == 0
 
-test <- function() {
-    r <- new_offset_record(100)
-    for (i in 1:10000) {
-        if (interesting_row_number(r, i)) {
-            add_next_offset_if_interesting(r, i, -i)            
-            print(i)
+    if (token == "") {
+        attributes(token)$type <- TOKEN_EMPTY
+        # attributes(token)$typed_value <- NULL # redundant
+        return(token)
+    }
+
+    if (is.na(token) || token == "NA") {
+        attributes(token)$type <- TOKEN_NA
+        attributes(token)$typed_value <- NA
+        return(token)
+    }
+
+    maybe_logical <- suppressWarnings(as.logical(token))
+    if (!is.na(maybe_logical)) {
+        attributes(token)$type <- TOKEN_LOGICAL
+        attributes(token)$typed_value <- maybe_logical
+        return(token)
+    }
+
+    maybe_numeric <- suppressWarnings(as.numeric(token))
+    if (!is.na(maybe_numeric)) {
+        if (abs(maybe_numeric - round(maybe_numeric)) < (.Machine$double.eps^0.5)){
+            attributes(token)$type <- TOKEN_INTEGER
+            attributes(token)$typed_value <- as.integer(maybe_numeric)
+            return(token)
+        } else {
+            attributes(token)$type <- TOKEN_NUMERIC
+            attributes(token)$typed_value <- maybe_numeric
+            return(token)
         }
     }
-    r
+
+    attributes(token)$type <- TOKEN_CHARACTER
+    attributes(token)$typed_value <- as.character(token)
+    return(token)
 }
+
+unify_types <- function(a, b) {
+    if (is.na(a)) return(b)
+    if (is.na(b)) return(a)
+    if (a > b)  a else b
+}
+
+untyped_token_to_typed_value <- function(type, token) {
+    if (type == TOKEN_EMPTY)     return(NA)
+    if (type == TOKEN_NA)        return(NA)
+    if (type == TOKEN_LOGICAL)   return(as.logical(token))
+    if (type == TOKEN_INTEGER)   return(as.integer(token))
+    if (type == TOKEN_NUMERIC)   return(as.numeric(token))
+    if (type == TOKEN_CHARACTER) return(as.character(token))
+}
+
+new_typed_value_vector <- function(type, n) {
+    if (type == TOKEN_EMPTY)     return(rep(NA, n))
+    if (type == TOKEN_NA)        return(rep(NA, n))
+    if (type == TOKEN_LOGICAL)   return(rep(as.logical(NA), n))
+    if (type == TOKEN_INTEGER)   return(rep(as.integer(NA), n))
+    if (type == TOKEN_NUMERIC)   return(rep(as.numeric(NA), n))
+    if (type == TOKEN_CHARACTER) return(rep(as.character(NA), n))
+}
+
+#' @export 
+ufo_csv_scan <- function(path, offset_interval, header, token_buffer_size, character_buffer_size) {
+    tokenizer <- new_tokenizer(path, as.integer(0), token_buffer_size, character_buffer_size)
+    offset_record <- new_offset_record(offset_interval)
+
+    column_names <- NA
+    column_types <- NA
+    # distinct_values <- NA
+
+    column <- as.integer(1)
+    row <- as.integer(1)
+    max_columns <- as.integer(1)
+
+    construct_result <- function() {
+        stretched_column_names <- character(max_columns)
+        stretched_column_names[1:length(column_names)] <- column_names
+
+        stretched_column_types <- integer(max_columns)
+        stretched_column_types[1:length(column_types)] <- column_types
+
+        data <- data.frame(
+            column_names = stretched_column_names,
+            column_types = stretched_column_types
+        )
+
+        attributes(data)$path = path
+        attributes(data)$column_count = max_columns
+        attributes(data)$row_count = row
+        attributes(data)$header = header
+        attributes(data)$token_buffer_size = token_buffer_size
+        attributes(data)$character_buffer_size = character_buffer_size
+        attributes(data)$offset_record = offset_record
+        
+        class(data) <- "scan_info"
+        
+        data
+    }
+
+    # header
+    if (header) {
+        parse_header <- TRUE
+        while (parse_header) {
+            result <- next_token(tokenizer)
+
+            if (result$token == "") {
+                column_names[column] <- NA
+            } else {
+                column_names[column] <- result$token
+            }
+
+            switch(result$status,
+                TOKENIZER_OK = {
+                    column <- column + 1
+                },
+                TOKENIZER_END_OF_ROW = {
+                    max_columns <- column
+                    column <- 1
+                    # row <- row + 1;
+                    parse_header <- FALSE
+                },
+                TOKENIZER_END_OF_FILE = {
+                    return(construct_result())
+                }
+            )
+        }
+    }
+
+    # body
+    while (TRUE) {
+        result <- next_token(tokenizer)
+
+        if (is.na(column_types[column]) || column_types[column] != TOKEN_CHARACTER) {
+            token <- to_typed_token(result$token)
+            column_types[column] <- unify_types(attributes(token)$type, column_types[column])
+        }
+
+        if (column == 1) {
+            offset <- attributes(result$token)$position_start
+            add_next_offset_if_interesting(offset_record, row, offset)
+        }
+ 
+        switch(result$status,
+            TOKENIZER_OK = {
+                column <- column + 1
+            },
+            TOKENIZER_END_OF_ROW = {
+                max_columns <- max(column, max_columns)
+                column <- 1
+                row <- row + 1
+            },
+            TOKENIZER_END_OF_FILE = {
+                return(construct_result())
+            }
+        )
+    }
+}
+
+#' @export
+ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, end_at_row) {
+    if (attributes(scan_info)$row_count == 0) {
+        stop("unimplemented")
+    }
+
+    if (missing(end_at_row)) {
+        end_at_row <- scan_info$column_types[attributes(scan_info)$row_count]
+    }
+
+    column_type <- scan_info$column_types[target_column]
+    target_rows <- end_at_row - start_from_row
+    values <- new_typed_value_vector(column_type, target_rows)
+    
+    offset_info <- offset_closest_to_this_row(attributes(scan_info)$offset_record, start_from_row)
+    # seek to offset_info$file_offset
+    # skip the rows between offset_info$row_at_offset and start_from_row
+    cat(paste0("Start from offset: ", offset_info$file_offset, " at row: ", offset_info$row_at_offset, "\n"))
+
+    tokenizer <- new_tokenizer_from_scan_info(scan_info, offset_info$file_offset)
+
+    row <- offset_info$row_at_offset
+    column <- 1
+
+    while (TRUE) {
+
+        #if (end_at_row - 1 >= row) return(values)
+
+        print(paste0("row: ", row, " column: ", column, " targeted: ", target_column, " -> ", column == target_column))
+        result <- next_token(tokenizer)
+
+        if (column == target_column) {
+            typed_value = untyped_token_to_typed_value(column_type, result$token)
+            values[row - start_from_row + 1] <- typed_value
+        }
+
+        print(paste0("values: ", values))
+
+        switch(result$status,
+            TOKENIZER_OK = {
+                column <- column + 1
+            },
+            TOKENIZER_END_OF_ROW = {
+                column <- 1
+                row <- row + 1
+            },
+            TOKENIZER_END_OF_FILE = {
+                return(values)
+            }
+        )
+    }
+}
+
+# print.scan_info <- function(scan_info, ...) {
+#     cat(paste0("[column_count]: ", attributes(scan_info)$column_count, "\n"))
+#     cat(paste0("[row_count]: ", attributes(scan_info)$row_count, "\n"))
+#     print.data.frame(scan_info, ...)
+# }
+
+test <- function(n=1) {
+    # browser()
+    scan_info <- ufo_csv_scan(path="test.csv", offset_interval=10, header=T, token_buffer_size=100, character_buffer_size=100)
+    ufo_csv_read_column(scan_info, target_column = n)
+    # print(ufo_csv_read_column(scan_info, target_column = 2))
+    # print(ufo_csv_read_column(scan_info, target_column = 3))
+    # print(ufo_csv_read_column(scan_info, target_column = 4))
+    # print(ufo_csv_read_column(scan_info, target_column = 5))
+}
+
+# test <- function() {
+#     r <- new_offset_record(100)
+#     for (i in 1:10000) {
+#         if (interesting_row_number(r, i)) {
+#             add_next_offset_if_interesting(r, i, -i)            
+#             print(i)
+#         }
+#     }
+#     r
+# }
+
