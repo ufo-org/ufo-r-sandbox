@@ -1,23 +1,3 @@
-#' Creates a dataframe representing a CSV file, where each column is a lazily
-#' popuilated UFO. In order to figure out column types, does a scan of the whole
-#' file at the outset.
-#' @param from the first number in the sequence
-#' @param to the last number in the sequence
-#' @param by the step of the sequence (default: 1)
-#' @param read_only sets the vector to be write-protected by the OS
-#'                  (optional, false by default).
-#' @param chunk_length the minimum number of elements loaded at once,
-#'                     will always be rounded up to a full memory page
-#'                     (optional, a page by default).
-#' @param ... other ufo configuration options (see `ufo_integer_constructor`)
-#' @return a ufo vector lazily populated with the values of the specified
-#'         sequence
-#' @export
-ufo_csv <- function(path, ...) {
-    #connection <- file(path)
-    stop("unimplemented")
-}
-
 new_raw_buffer <- function(max_size, values = raw(0)) { # -> env class:buffer
     buffer <- new.env()
     buffer$values = as.raw(values)
@@ -598,13 +578,16 @@ unify_types <- function(a, b) {
     if (a > b)  a else b
 }
 
+CHARACTER_NA_VALUES = c("", "NA")
+
 untyped_token_to_typed_value <- function(type, token) {
     if (type == TOKEN_EMPTY)     return(NA)
     if (type == TOKEN_NA)        return(NA)
     if (type == TOKEN_LOGICAL)   return(as.logical(token))
     if (type == TOKEN_INTEGER)   return(as.integer(token))
     if (type == TOKEN_NUMERIC)   return(as.numeric(token))
-    if (type == TOKEN_CHARACTER) return(as.character(token))
+    if (type == TOKEN_CHARACTER) return(if (token %in% CHARACTER_NA_VALUES) as.character(NA) else as.character(token))
+    stop("unreachable")
 }
 
 new_typed_value_vector <- function(type, n) {
@@ -613,7 +596,18 @@ new_typed_value_vector <- function(type, n) {
     if (type == TOKEN_LOGICAL)   return(rep(as.logical(NA), n))
     if (type == TOKEN_INTEGER)   return(rep(as.integer(NA), n))
     if (type == TOKEN_NUMERIC)   return(rep(as.numeric(NA), n))
-    if (type == TOKEN_CHARACTER) return(rep(as.character(NA), n))
+    if (type == TOKEN_CHARACTER) return(rep(NA, n))
+    stop("unreachable")
+}
+
+token_type_to_mode <- function(type) {
+    if (type == TOKEN_EMPTY)     return("logical")
+    if (type == TOKEN_NA)        return("logical")
+    if (type == TOKEN_LOGICAL)   return("logical")
+    if (type == TOKEN_INTEGER)   return("integer")
+    if (type == TOKEN_NUMERIC)   return("numeric")
+    if (type == TOKEN_CHARACTER) return("character")
+    stop("unreachable")
 }
 
 #' @export 
@@ -720,11 +714,11 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
     }
 
     if (missing(end_at_row)) {
-        end_at_row <- scan_info$column_types[attributes(scan_info)$row_count]
+        end_at_row <- attributes(scan_info)$row_count
     }
 
     column_type <- scan_info$column_types[target_column]
-    target_rows <- end_at_row - start_from_row
+    target_rows <- end_at_row - start_from_row + 1
     values <- new_typed_value_vector(column_type, target_rows)
     
     offset_info <- offset_closest_to_this_row(attributes(scan_info)$offset_record, start_from_row)
@@ -737,9 +731,7 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
     row <- offset_info$row_at_offset
     column <- 1
 
-    while (TRUE) {
-
-        #if (end_at_row - 1 >= row) return(values)
+    while (end_at_row >= row) {
 
         print(paste0("row: ", row, " column: ", column, " targeted: ", target_column, " -> ", column == target_column))
         result <- next_token(tokenizer)
@@ -760,36 +752,98 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
                 row <- row + 1
             },
             TOKENIZER_END_OF_FILE = {
-                return(values)
+                break
             }
         )
     }
+
+    return(values)
 }
 
-# print.scan_info <- function(scan_info, ...) {
-#     cat(paste0("[column_count]: ", attributes(scan_info)$column_count, "\n"))
-#     cat(paste0("[row_count]: ", attributes(scan_info)$row_count, "\n"))
-#     print.data.frame(scan_info, ...)
-# }
-
-test <- function(n=1) {
+test <- function(n=1,s=1, e=5) {
     # browser()
     scan_info <- ufo_csv_scan(path="test.csv", offset_interval=10, header=T, token_buffer_size=100, character_buffer_size=100)
-    ufo_csv_read_column(scan_info, target_column = n)
+    print(scan_info)
+    ufo_csv_read_column(scan_info, target_column = n, start_from_row = s, end_at_row = e)
     # print(ufo_csv_read_column(scan_info, target_column = 2))
     # print(ufo_csv_read_column(scan_info, target_column = 3))
     # print(ufo_csv_read_column(scan_info, target_column = 4))
     # print(ufo_csv_read_column(scan_info, target_column = 5))
 }
 
-# test <- function() {
-#     r <- new_offset_record(100)
-#     for (i in 1:10000) {
-#         if (interesting_row_number(r, i)) {
-#             add_next_offset_if_interesting(r, i, -i)            
-#             print(i)
-#         }
-#     }
-#     r
-# }
 
+read_csv <- function (path, header=TRUE, offset_interval = 1000, token_buffer_size = 4000, character_buffer_size = 4000) {
+    scan_info <- ufo_csv_scan(path, offset_interval = offset_interval, header = header, token_buffer_size = token_buffer_size, character_buffer_size = character_buffer_size)
+
+    names <- sapply(1:length(scan_info$column_names), function(i) {
+        if (is.na(scan_info$column_names[i])) {
+            paste0("column.", i) 
+        } else {
+            paste0(unlist(strsplit(scan_info$column_names[i], " ")), collapse=".")
+        }
+    })
+
+    columns <- lapply(1:length(scan_info$column_names), function(i) {
+        ufo_csv_read_column(scan_info, target_column = i)
+    })
+    names(columns) <- scan_info$names
+    
+    csv <- do.call(data.frame, columns)
+    return(csv)
+}
+
+#' Creates a dataframe representing a CSV file, where each column is a lazily
+#' popuilated UFO. In order to figure out column types, does a scan of the whole
+#' file at the outset.
+#' @param from the first number in the sequence
+#' @param to the last number in the sequence
+#' @param by the step of the sequence (default: 1)
+#' @param read_only sets the vector to be write-protected by the OS
+#'                  (optional, false by default).
+#' @param chunk_length the minimum number of elements loaded at once,
+#'                     will always be rounded up to a full memory page
+#'                     (optional, a page by default).
+#' @param ... other ufo configuration options (see `ufo_integer_constructor`)
+#' @return a ufo vector lazily populated with the values of the specified
+#'         sequence
+#' @export
+ufo_csv <- function(path, header=TRUE, offset_interval = 1000, token_buffer_size = 4000, character_buffer_size = 4000, ...) {
+    scan_info <- ufo_csv_scan(path, offset_interval = offset_interval, header = header, token_buffer_size = token_buffer_size, character_buffer_size = character_buffer_size)
+
+    names <- sapply(1:length(scan_info$column_names), function(i) {
+        if (is.na(scan_info$column_names[i])) {
+            paste0("column.", i)
+        } else {
+            paste0(unlist(strsplit(scan_info$column_names[i], " ")), collapse=".")
+        }
+    })
+
+    columns <- lapply(1:length(scan_info$column_names), function(i) {
+        column_type <- scan_info$column_types[i]
+        column_mode <- token_type_to_mode(column_type)
+        row_count <- attributes(scan_info)$row_count
+
+        # small optimization, we don't actually need to read these from disk
+        if (column_type == TOKEN_EMPTY || column_type == TOKEN_NA) {
+            return(ufo_logical(length = row_count, initial_value = NA))
+        }
+
+        populate <- function(start, end, scan_info, target_column, ...) {
+            ufo_csv_read_column(
+                scan_info = scan_info,
+                target_column = target_column,
+                start_from_row = start,
+                end_at_row = end
+            )
+        }
+
+        ufo_vector_constructor(
+            mode = column_mode,
+            length = row_count,
+            populate = populate,
+            scan_info = scan_info,
+            target_column = i,
+            ...
+        )
+    })
+}
