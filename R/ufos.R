@@ -111,7 +111,6 @@ ufo_vector_constructor <- function(mode, length, populate,
                              reset = reset, destroy = destroy,
                              finalizer = finalizer, read_only = read_only,
                              chunk_length = chunk_length)
-    print("WTF")
 
     if ((missing(add_class) && isTRUE(getOption("ufos.add_class", TRUE)))
        || (!missing(add_class) && isTRUE(add_class))) {

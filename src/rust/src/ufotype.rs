@@ -5,7 +5,7 @@ use itertools::Itertools;
 use libR_sys::Rf_mkChar;
 use ufo_ipc::{GenericValueBoxed, UnexpectedGenericType};
 
-use crate::{serder::DeserdeR, errors::IntoServerError, r_error, r_bail_if};
+use crate::{errors::IntoServerError, r_error};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum UfoType {
@@ -68,9 +68,9 @@ impl UfoType {
             UfoType::Boolean | 
             UfoType::Raw       => {
                 let bytes = result.into_iter().exactly_one()
-                    .map_err(|e| r_error!("Expecting a function returning {} to send back a single byte vector as response", self))?
+                    .map_err(|_e| r_error!("Expecting a function returning {} to send back a single byte vector as response", self))?
                     .expect_bytes_into()
-                    .map_err(|e| r_error!("Expecting a function returning {} to send back a byte vector as response", self))?;
+                    .map_err(|_e| r_error!("Expecting a function returning {} to send back a byte vector as response", self))?;
                 Ok(bytes)
             }
             UfoType::Character => self.convert_strings_to_data(result),
@@ -94,12 +94,12 @@ impl UfoType {
         //r_bail_if!(unsafe { libR_sys::R_gc_running() == 1 } => "Cannot allocate character vectors when the GC is running.");
 
         let bytes: Vec<u8> = strings.into_iter().flat_map(|string| {
-            println!("str: {:?}", string);   
+            // println!("str: {:?}", string);   
             let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
             // let character_vector = unsafe { r!(string).get() };
-            println!("character_vector: {:?}", character_vector);
+            // println!("character_vector: {:?}", character_vector);
             let ne_bytes = (character_vector as usize).to_ne_bytes();
-            println!("character_vector as ne_bytes: {:?}", ne_bytes);
+            // println!("character_vector as ne_bytes: {:?}", ne_bytes);
             ne_bytes
         }).collect();
 

@@ -36,7 +36,7 @@ pub struct Server {
 
 impl Server {
     pub fn new() -> Self {
-        eprintln!("Server::new");
+        // eprintln!("Server::new");
 
         Server {
             functions: HashMap::new(),
@@ -45,10 +45,10 @@ impl Server {
     }
 
     fn define_data(&mut self, token: DataToken, value: Vec<u8>) -> Result<()> {
-        eprintln!("Server::define_data:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
-        eprintln!("   value:          {:?}", value);
+        // eprintln!("Server::define_data:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
+        // eprintln!("   value:          {:?}", value);
 
         r_bail_if!(self.objects.contains_key(&token) => 
             "Sandbox server error: Cannot define user data {:?} because it is already defined.", token);        
@@ -62,9 +62,9 @@ impl Server {
     }
 
     fn free_data(&mut self, token: DataToken) -> Result<()> {        
-        eprintln!("Server::free_data:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
+        // eprintln!("Server::free_data:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
 
         self.objects.remove(&token)
             .rewrap(|| format!("Sandbox server error: Cannot remove user data {:?} because it does not exist", token))?;
@@ -72,12 +72,12 @@ impl Server {
     }
 
     fn define_function(&mut self, token: FunctionToken, user_data: DataToken, function: Vec<u8>, parameters: VecDeque<String>, return_type: Option<&String>) -> Result<()> {
-        eprintln!("Server::define_function:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
-        eprintln!("   user_data:      {:?}", user_data);
-        eprintln!("   function:       {:?}", function);
-        eprintln!("   parameters:     {:?}", parameters);
+        // eprintln!("Server::define_function:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
+        // eprintln!("   user_data:      {:?}", user_data);
+        // eprintln!("   function:       {:?}", function);
+        // eprintln!("   parameters:     {:?}", parameters);
 
         r_bail_if!(!self.objects.contains_key(&user_data) => 
             "Sandbox server error: Cannot define function {:?} because user data {:?} does not exist.", token, user_data);
@@ -99,15 +99,15 @@ impl Server {
     }
 
     fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<Vec<GenericValueBoxed>> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
-        eprintln!("Server::call_function:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
-        eprintln!("   arguments:      {:?}", arguments);
+        // eprintln!("Server::call_function:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
+        // eprintln!("   arguments:      {:?}", arguments);
 
         let function = self.functions.get(&token)
             .rewrap(|| format!("Sandbox server error: Cannot call function {:?} because it is not defined.", token))?;
 
-        eprintln!("   function:       {:?}", function);
+        // eprintln!("   function:       {:?}", function);
 
         r_bail_if!(function.parameters.len() != arguments.len() => // 2 arguments are tacked on: user_function and user_data
             "Sandbox server error: Cannot call function {:?} because the number of arguments {} does not match the expected {}", 
@@ -121,8 +121,8 @@ impl Server {
             .map(|generic| generic.deserialize())
             .collect::<Result<Vec<Robj>>>()?;
 
-        println!("USER_DATA:  {:?}", user_data);
-        println!("PARAMETERS: {:?}", function.parameters);
+        // println!("USER_DATA:  {:?}", user_data);
+        // println!("PARAMETERS: {:?}", function.parameters);
  
         // Needed to shorten the lifetimes from 'static to '_.
         let user_data = user_data.iter()
@@ -136,10 +136,10 @@ impl Server {
                 .collect::<Vec<(&str, Robj)>>()
         );
 
-        eprintln!("Calling runtime: do.call({:?}, {:?}", function.executable, pairs);
+        // eprintln!("Calling runtime: do.call({:?}, {:?}", function.executable, pairs);
 
         let result= call!("do.call", &function.executable, pairs)?;
-        eprintln!("   result:         {:?}", result);
+        // eprintln!("   result:         {:?}", result);
 
         // let serialized_result = result.serialize()?;        
         // eprintln!("   serialized:     {:?}", serialized_result);
@@ -158,16 +158,16 @@ impl Server {
         //     std::slice::from_raw_parts(data_ptr as *const u8, size)
         // };
 
-        eprintln!("SENDING BACK RESULT :: {:?}", result);
+        // eprintln!("SENDING BACK RESULT :: {:?}", result);
        
         // Ok(serialized_result)
         result
     }
 
     fn free_function(&mut self, token: FunctionToken) -> Result<()> {
-        eprintln!("Server::free_function:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);        
+        // eprintln!("Server::free_function:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);        
         
         self.functions.remove(&token)
             .rewrap(|| format!("Sandbox server error: Cannot remove function {:?} because it does not exist", token))?;
@@ -175,8 +175,8 @@ impl Server {
     }
 
     pub fn listen(&mut self) -> Result<()> {
-        eprintln!("Server::listen:");
-        eprintln!("   self:           {:?}", self);        
+        // eprintln!("Server::listen:");
+        // eprintln!("   self:           {:?}", self);        
 
         let mut server = ufo_ipc::subordinate_begin().rewrap(|| "Sandbox server error:")?;
         loop {

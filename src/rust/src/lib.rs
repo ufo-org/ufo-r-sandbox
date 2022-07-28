@@ -70,9 +70,9 @@ impl std::fmt::Debug for UfoSystem {
 
 impl RUnfriendlyAPI for UfoSystem {
     fn create_ufo(&self, prototype: UfoObjectParams) -> Result<*mut c_void> {
-        eprintln!("UfoSystem::create_ufo:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   prototype:      {:?}", prototype);
+        // eprintln!("UfoSystem::create_ufo:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   prototype:      {:?}", prototype);
 
         let config = prototype.new_config();
         let ufo = self.core.allocate_ufo(config).rewrap(|| "Error constructing UFO")?;
@@ -82,9 +82,9 @@ impl RUnfriendlyAPI for UfoSystem {
     }
 
     fn free_ufo(&self, pointer: *mut c_void) -> Result<()> {
-        eprintln!("UfoSystem::free_ufo:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   pointer         {:?}", pointer);
+        // eprintln!("UfoSystem::free_ufo:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   pointer         {:?}", pointer);
 
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error freeing UFO")?;
         let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during free")?;        
@@ -99,9 +99,9 @@ impl RUnfriendlyAPI for UfoSystem {
     }
 
     fn reset_ufo(&self, pointer: *mut c_void) -> Result<()> {
-        eprintln!("UfoSystem::reset_ufo:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   pointer         {:?}", pointer);
+        // eprintln!("UfoSystem::reset_ufo:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   pointer         {:?}", pointer);
 
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error retrieving UFO during reset")?;
 
@@ -120,12 +120,12 @@ impl RUnfriendlyAPI for UfoSystem {
 impl UfoSystem {
     pub fn initialize(writeback_path: String, high_watermark: i64, low_watermark: i64) -> Result<Self> {
         
-        println!("Ufo core is initializing...");
+        // println!("Ufo core is initializing...");
 
-        eprintln!("UfoSystem::initialize:");
-        eprintln!("   writeback_path: {:?}", writeback_path);
-        eprintln!("   high_watermark: {:?}", high_watermark);
-        eprintln!("   low_watermark:  {:?}", low_watermark);
+        // eprintln!("UfoSystem::initialize:");
+        // eprintln!("   writeback_path: {:?}", writeback_path);
+        // eprintln!("   high_watermark: {:?}", high_watermark);
+        // eprintln!("   low_watermark:  {:?}", low_watermark);
 
         let directory = PathBuf::from(writeback_path.as_str());
         r_bail_if!(!directory.exists() =>
@@ -165,7 +165,7 @@ impl UfoSystem {
             low_watermark: low_watermark as usize,
         };
 
-        eprintln!("   config:         {:?}", config);
+        // eprintln!("   config:         {:?}", config);
 
         Ok(UfoSystem{ 
             core: r_or_bail!(UfoCore::new(config), "Cannot start UFO core system"),
@@ -174,10 +174,10 @@ impl UfoSystem {
     }
 
     pub fn shutdown(&self) {
-        eprintln!("UfoSystem::shutdown:");
-        eprintln!("   self:           {:?}", self);
+        // eprintln!("UfoSystem::shutdown:");
+        // eprintln!("   self:           {:?}", self);
 
-        eprintln!("Ufo sandbox is shuttind down...");
+        // eprintln!("Ufo sandbox is shuttind down...");
         self.sandbox.shutdown().unwrap();
 
         eprintln!("Ufo core is shutting down...");       
@@ -187,18 +187,18 @@ impl UfoSystem {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, reset: Robj, destroy: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
-        eprintln!("UfoSystem::new_ufo:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   mode:           {:?}", mode);
-        eprintln!("   length:         {:?}", length);
-        eprintln!("   user_data:      {:?}", user_data);
-        eprintln!("   populate:       {:?}", populate);
-        eprintln!("   writeback:      {:?}", writeback);
-        eprintln!("   reset:          {:?}", reset);
-        eprintln!("   destroy:        {:?}", destroy);
-        eprintln!("   finalizer:      {:?}", finalizer);
-        eprintln!("   read_only:      {:?}", read_only);
-        eprintln!("   chunk_length:   {:?}", chunk_length);
+        // eprintln!("UfoSystem::new_ufo:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   mode:           {:?}", mode);
+        // eprintln!("   length:         {:?}", length);
+        // eprintln!("   user_data:      {:?}", user_data);
+        // eprintln!("   populate:       {:?}", populate);
+        // eprintln!("   writeback:      {:?}", writeback);
+        // eprintln!("   reset:          {:?}", reset);
+        // eprintln!("   destroy:        {:?}", destroy);
+        // eprintln!("   finalizer:      {:?}", finalizer);
+        // eprintln!("   read_only:      {:?}", read_only);
+        // eprintln!("   chunk_length:   {:?}", chunk_length);
 
         r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
         r_bail_if!(length == 0 => "Cannot create an empty UFO");
@@ -300,7 +300,7 @@ impl UfoSystem {
         let reset_after_allocation = shared_data.as_ref().map_or(false, |data| data.ignore());
         if reset_after_allocation { unsafe {
             let sexp = ufo.get();
-            println!("SEXP: {:?}", sexp);
+            // println!("SEXP: {:?}", sexp);
             self.reset_ufo(sexp as *mut c_void).unwrap();
             shared_data.as_ref().unwrap().set_ignore(false);
         }}
@@ -313,12 +313,12 @@ impl UfoSystem {
     /// # Safety
     /// Function operates on raw pointer to area of memory. The contents are written to from a deserialized byte vector retrieved from sandbox.
     pub unsafe fn sandbox_populate(&self, token: FunctionToken, return_type: UfoType, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
-        eprintln!("UfoSystem::sandbox_populate:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
-        eprintln!("   start:          {:?}", start);
-        eprintln!("   end:            {:?}", end);
-        eprintln!("   memory:         {:?}", memory);
+        // eprintln!("UfoSystem::sandbox_populate:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
+        // eprintln!("   start:          {:?}", start);
+        // eprintln!("   end:            {:?}", end);
+        // eprintln!("   memory:         {:?}", memory);
 
         let result = self.sandbox
             .call_function(token, &[GenericValue::Vusize(start), GenericValue::Vusize(end)])
@@ -327,7 +327,7 @@ impl UfoSystem {
                 UfoPopulateError
             })?;
 
-        eprintln!("RECEIVED RESULT :: {:?}", result);
+        // eprintln!("RECEIVED RESULT :: {:?}", result);
 
         let result = return_type.convert_to_data(result).map_err(|e| {
             eprintln!("UFO populate error: {}", e);
@@ -344,12 +344,12 @@ impl UfoSystem {
     /// # Safety
     /// Function operates on raw pointer to area of memory. The contents are serialized and sent to sandbox.
     pub unsafe fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
-        eprintln!("UfoSystem::sandbox_writeback:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
-        eprintln!("   start:          {:?}", start);
-        eprintln!("   end:            {:?}", end);
-        eprintln!("   memory:         {:?}", memory);
+        // eprintln!("UfoSystem::sandbox_writeback:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
+        // eprintln!("   start:          {:?}", start);
+        // eprintln!("   end:            {:?}", end);
+        // eprintln!("   memory:         {:?}", memory);
 
         let data = GenericValue::Vbytes(std::slice::from_raw_parts(memory, end - start));
         let start = GenericValue::Vusize(start);
@@ -365,9 +365,9 @@ impl UfoSystem {
     }
 
     pub fn sandbox_reset(&self, token: FunctionToken) {
-        eprintln!("UfoSystem::sandbox_reset:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
+        // eprintln!("UfoSystem::sandbox_reset:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
 
         // let event_type = GenericValue::Vstring("reset");
         let result = self.sandbox
@@ -378,9 +378,9 @@ impl UfoSystem {
     }
 
     pub fn sandbox_destroy(&self, token: FunctionToken) {
-        eprintln!("UfoSystem::sandbox_destroy:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   token:          {:?}", token);
+        // eprintln!("UfoSystem::sandbox_destroy:");
+        // eprintln!("   self:           {:?}", self);
+        // eprintln!("   token:          {:?}", token);
 
         // let event_type = GenericValue::Vstring("destroy");
         let result = self.sandbox
@@ -441,8 +441,8 @@ impl SharedUfoRuntimeDataAPI for SharedUfoRuntimeData {
 
 impl UfoDefinition {
     pub fn prototype(&self) -> Result<UfoObjectParams> {
-        eprintln!("UfoDefinition::prototype:");
-        eprintln!("   self:           {:?}", self);
+        // eprintln!("UfoDefinition::prototype:");
+        // eprintln!("   self:           {:?}", self);
 
         r_bail_if!(!self.vector_type.is_vector() => "UFO needs to be a vector type");
 
@@ -463,7 +463,7 @@ impl UfoDefinition {
         // };
         assert_eq!(4 * 8, allocator_size); // This is in fact the size of R_allocator_t;    
 
-        eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
+        // eprintln!("Header_size: {}\nallocator_size:{}", header_size, allocator_size);
 
         let system = self.system.clone();
         let token = self.populate;
@@ -507,19 +507,19 @@ impl UfoDefinition {
                                 return;
                             }
                         }
-                        eprintln!("DOING WRITEBACK THINGS NAO!!!");
+                        // eprintln!("DOING WRITEBACK THINGS NAO!!!");
                         match event {
                             UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
                                 writeback.map(|token| unsafe {
-                                    eprintln!("wb");
+                                    // eprintln!("wb");
                                     system.sandbox_writeback(token, start_idx, end_idx, data)
                                 }),
                             UfoWriteListenerEvent::Reset =>  {
-                                eprintln!("reset");
+                                // eprintln!("reset");
                                 reset.map(|token| system.sandbox_reset(token))
                             }
                             UfoWriteListenerEvent::UfoWBDestroy => {
-                                eprintln!("destroy");
+                                // eprintln!("destroy");
                                 destroy.map(|token| system.sandbox_destroy(token))
                             }
                         }.unwrap_or(())
@@ -541,8 +541,8 @@ impl UfoDefinition {
     }
 
     pub fn construct_robj(self) -> Robj {
-        eprintln!("UfoDefinition::construct_robj:");
-        eprintln!("   self:           {:?}", self);
+        // eprintln!("UfoDefinition::construct_robj:");
+        // eprintln!("   self:           {:?}", self);
 
         let sexp_type = self.vector_type.as_sxp() as u32;
         let length = self.length as isize;
@@ -560,8 +560,8 @@ impl UfoDefinition {
     }
 
     pub fn finalize(&self) -> Result<()> {
-        eprintln!("UfoDefinition::finalize:");
-        eprintln!("   self:           {:?}", self);
+        // eprintln!("UfoDefinition::finalize:");
+        // eprintln!("   self:           {:?}", self);
 
         if let Some(finalizer) = self.finalizer {
             self.system.sandbox.call_procedure(finalizer, &[])?;
