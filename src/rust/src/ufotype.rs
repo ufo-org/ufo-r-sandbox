@@ -91,7 +91,7 @@ impl UfoType {
             .collect::<std::result::Result<Vec<String>, UnexpectedGenericType>>()
             .rewrap(|| r_error!("Expecting a function returning {} to send back a vector of strings", self))?;
         
-        r_bail_if!(unsafe { libR_sys::R_gc_running() == 1 } => "Cannot allocate character vectors when the GC is running.");
+        //r_bail_if!(unsafe { libR_sys::R_gc_running() == 1 } => "Cannot allocate character vectors when the GC is running.");
 
         let bytes: Vec<u8> = strings.into_iter().flat_map(|string| {
             println!("str: {:?}", string);   

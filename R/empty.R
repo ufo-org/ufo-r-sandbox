@@ -20,7 +20,8 @@ ufo_integer <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.integer(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) integer(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) integer(end - start)
             else rep(initial_value, end - start)
         },
         ...
@@ -47,7 +48,8 @@ ufo_numeric <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.numeric(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) numeric(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) numeric(end - start)
             else rep(initial_value, end - start)
         },
         ...
@@ -74,7 +76,8 @@ ufo_logical <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.logical(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) logical(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) logical(end - start)
             else rep(initial_value, end - start)
         },
         ...
@@ -101,7 +104,8 @@ ufo_complex <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.complex(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) complex(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) complex(end - start)
             else rep(initial_value, end - start)
         },
         ...
@@ -129,7 +133,8 @@ ufo_character <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.character(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) character(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) character(end - start)
             else rep(initial_value, end - start)
         },
         ...
@@ -156,7 +161,8 @@ ufo_raw <- function(length = 0, initial_value = 0, ...) {
         length = length,
         initial_value = as.raw(initial_value),
         populate = function(start, end, initial_value, ...) {
-            if (initial_value == 0) raw(end - start)
+            if (is.na(initial_value)) rep(initial_value, end - start)            
+            else if (initial_value == 0) raw(end - start)
             else rep(initial_value, end - start)
         },
         ...

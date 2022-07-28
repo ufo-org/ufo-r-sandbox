@@ -733,15 +733,16 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
 
     while (end_at_row >= row) {
 
-        print(paste0("row: ", row, " column: ", column, " targeted: ", target_column, " -> ", column == target_column))
+        #print(paste0("row: ", row, " column: ", column, " targeted: ", target_column, " -> ", column == target_column))
         result <- next_token(tokenizer)
+        #print(paste0("token: ", result))
 
         if (column == target_column) {
             typed_value = untyped_token_to_typed_value(column_type, result$token)
-            values[row - start_from_row + 1] <- typed_value
+            values[row - start_from_row] <- typed_value
         }
 
-        print(paste0("values: ", values))
+        #print(paste0("values: ", values))
 
         switch(result$status,
             TOKENIZER_OK = {
@@ -846,4 +847,7 @@ ufo_csv <- function(path, header=TRUE, offset_interval = 1000, token_buffer_size
             ...
         )
     })
+
+    names(columns) <- names
+    columns
 }
