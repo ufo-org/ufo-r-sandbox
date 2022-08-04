@@ -339,8 +339,6 @@ impl UfoSystem {
         Ok(())
     }
 
-
-
     /// # Safety
     /// Function operates on raw pointer to area of memory. The contents are serialized and sent to sandbox.
     pub unsafe fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
