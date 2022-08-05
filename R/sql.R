@@ -2,6 +2,15 @@
 # library(DBI)
 # library(RSQLite)
 
+sqlite_table_columns <- function(db, table, ...)  {
+    connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
+    result <- DBI::dbSendQuery(connection, paste0("PRAGMA table_info(", DBI::dbQuoteIdentifier(connection, table), ")"))
+    columns <- DBI::dbFetch(result)
+    DBI::dbClearResult(result)
+    print(columns)
+    columns$name
+}
+
 sqlite_column_type <- function(db, table, column, ...)  {
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
     result <- DBI::dbSendQuery(connection, paste0("PRAGMA table_info(", DBI::dbQuoteIdentifier(connection, table), ")"))
@@ -122,30 +131,31 @@ sqlite_populate_logical <- function(db, start, end, table, column, ...) {
     )
 }
 
-#' Creates a UFO object of representing a column from an SQL database
-#' Uses seq.int internally to generate each fragment of the sequence.
-#' @param from the first number in the sequence
-#' @param to the last number in the sequence
-#' @param by the step of the sequence (default: 1)
+#' Creates a UFO object of representing a column from an SQL database.
+#' @param db database connection information
+#' @param table the name of the table in the database
+#' @param column the name of the column in the database
+#' @param driver a string describing the database driver, one of: SQLite
 #' @param read_only sets the vector to be write-protected by the OS
 #'                  (optional, false by default).
 #' @param chunk_length the minimum number of elements loaded at once,
 #'                     will always be rounded up to a full memory page
 #'                     (optional, a page by default).
-#' @param ... other ufo configuration options (see `ufo_integer_constructor`)
+#' @param ... other ufo or db configuration options
 #' @return a ufo vector lazily populated with the values of the specified
 #'         column
 #' @export
-ufo_sql_db_column <- function(db, table, column, ..., driver = "SQLite") {
+ufo_sql_column <- function(db, table, column, ..., driver = "SQLite") {
 
     column_type <- NULL
     column_length <- NULL
 
     if (driver == "SQLite" || driver == "SQLITE" || driver == "sqlite") {
-        column_type   <- sqlite_column_type(db = db, table = table, column = column, ...)
-        column_length <- sqlite_column_length(db = db, table = table, column = column, ...)
+        column_type   <- sqlite_column_type(db=db, table=table, column=column, ...)
+        column_length <- sqlite_column_length(db=db, table=table, column=column, ...)
     } else {
-        stop(paste0("Unsupported database driver: ", driver, ". Use one of: SQLite"))
+        stop(paste0("Unsupported database driver: ", driver, ". ",
+                    "Use one of: SQLite"))
     }
 
     populate <- if (column_type == "integer") sqlite_populate_integer
@@ -154,7 +164,10 @@ ufo_sql_db_column <- function(db, table, column, ..., driver = "SQLite") {
         else if (column_type == "character") sqlite_populate_character
         else if (column_type == "logical") sqlite_populate_logical
         else { 
-            stop("Column \"", column, "\" from table \"", table,"\" has type ",type, " which cannot be represented as a UFO. It has to be one of: integer, numeric, raw, character, or logical.")
+            stop("Column \"", column, "\" from table \"", table,"\" has type ",
+                 type, " which cannot be represented as a UFO. ",
+                 "It has to be one of: integer, numeric, raw, character, "
+                 "or logical.")
         }
 
     # populate(db=db, start=1, end=column_length + 1, table=table, column=column, ...)
@@ -164,4 +177,31 @@ ufo_sql_db_column <- function(db, table, column, ..., driver = "SQLite") {
                db = db, table = table, column = column,
                ...
     )
+}
+
+#' Creates a UFO object representing a table from an SQL database. 
+#' @param db database connection information
+#' @param table the name of the table in the database
+#' @param driver a string describing the database driver, one of: SQLite
+#' @param read_only sets the vector to be write-protected by the OS
+#'                  (optional, false by default).
+#' @param chunk_length the minimum number of elements loaded at once,
+#'                     will always be rounded up to a full memory page
+#'                     (optional, a page by default).
+#' @param ... other ufo or db configuration options
+#' @return a list containig ufo vectors lazily populated with the values
+#'         of individual columns in the specified table 
+#' @export
+ufo_sql_table <- function(db, table, ..., driver = "SQLite") {
+
+    columns <- NULL
+
+    if (driver == "SQLite" || driver == "SQLITE" || driver == "sqlite") {
+        columns <- sqlite_table_columns(db, table, ...)
+    } else {
+        stop(paste0("Unsupported database driver: ", driver, ". Use one of: SQLite"))
+    }
+
+    result <- lapply(columns, function(column) ufo_sql_column(db, table, column, ..., driver))
+    names(result) <- columns
 }
