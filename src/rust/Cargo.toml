@@ -14,7 +14,8 @@ libR-sys = "*"
 
 extendr-api = { git = "https://github.com/extendr/extendr", branch = "master" }
 
-ufo_core = { git = "https://github.com/ufo-org/ufo-core", branch = "main" }
+# ufo_core = { git = "https://github.com/ufo-org/ufo-core", branch = "main" }
+ufo_core = { path = "/home/ckerr/workspace/ufo/ufo-core", features = ["parallel_hashing"] }
 ufo_ipc = { git = "https://github.com/ufo-org/ufo_ipc", branch = "main" }
 #ufo = { git = "https://github.com/ufo-org/ufo-rust", branch = "main" } # { git = "https://github.com/ufo-org/ufo-rust", branch = "main" }
 # ufo = { path = "../../../ufo-rust", default = false }
