@@ -103,14 +103,28 @@ impl RUnfriendlyAPI for UfoSystem {
         // eprintln!("   self:           {:?}", self);
         // eprintln!("   pointer         {:?}", pointer);
 
+        eprintln!("XXX reset 1");
+
         let ufo = self.core.get_ufo_by_address(pointer as usize).rewrap(|| "Error retrieving UFO during reset")?;
 
+        eprintln!("XXX reset 2");
+
         let mut locked_ufo = ufo.write().rewrap(|| "Error locking UFO during reset")?;
+
+        eprintln!("XXX reset 3");
+
         let wait_group = locked_ufo.reset().rewrap(|| "Error performing reset on a UFO")?;
+
+        eprintln!("XXX reset 4");
+
         std::mem::drop(locked_ufo);
+
+        eprintln!("XXX reset 5");
 
         // If lock is not dropped before wait_group.wait(), there's a deadlock.
         wait_group.wait();
+
+        eprintln!("XXX reset 6");
 
         Ok(())
     }
@@ -187,18 +201,18 @@ impl UfoSystem {
 
     #[allow(clippy::too_many_arguments)]
     pub fn new_ufo(&self, mode: &str, length: i64, user_data: Robj, populate: Robj, writeback: Robj, reset: Robj, destroy: Robj, finalizer: Robj, read_only: bool, chunk_length: i64) -> Result<Robj> {       
-        // eprintln!("UfoSystem::new_ufo:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   mode:           {:?}", mode);
-        // eprintln!("   length:         {:?}", length);
-        // eprintln!("   user_data:      {:?}", user_data);
-        // eprintln!("   populate:       {:?}", populate);
-        // eprintln!("   writeback:      {:?}", writeback);
-        // eprintln!("   reset:          {:?}", reset);
-        // eprintln!("   destroy:        {:?}", destroy);
-        // eprintln!("   finalizer:      {:?}", finalizer);
-        // eprintln!("   read_only:      {:?}", read_only);
-        // eprintln!("   chunk_length:   {:?}", chunk_length);
+        eprintln!("UfoSystem::new_ufo:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   mode:           {:?}", mode);
+        eprintln!("   length:         {:?}", length);
+        eprintln!("   user_data:      {:?}", user_data);
+        eprintln!("   populate:       {:?}", populate);
+        eprintln!("   writeback:      {:?}", writeback);
+        eprintln!("   reset:          {:?}", reset);
+        eprintln!("   destroy:        {:?}", destroy);
+        eprintln!("   finalizer:      {:?}", finalizer);
+        eprintln!("   read_only:      {:?}", read_only);
+        eprintln!("   chunk_length:   {:?}", chunk_length);
 
         r_bail_if!(length < 0 => "Attempting to create UFO with negative length {}", length);
         r_bail_if!(length == 0 => "Cannot create an empty UFO");
@@ -279,6 +293,8 @@ impl UfoSystem {
             Rtype::Strings => Some(SharedUfoRuntimeData::initially_do_not_populate()),
             _ => None
         };
+
+        eprintln!("XXX definition 1");
        
         let ufo = UfoDefinition { 
             system: self.clone(), // Cloning just involves copying a reference via an arc wrapped in UfoSystem.
@@ -297,13 +313,22 @@ impl UfoSystem {
             return_type, 
         }.construct_robj();
 
+        eprintln!("XXX definition 2");
+
         let reset_after_allocation = shared_data.as_ref().map_or(false, |data| data.ignore());
+
+        eprintln!("XXX definition 3");
+
         if reset_after_allocation { unsafe {
             let sexp = ufo.get();
             // println!("SEXP: {:?}", sexp);
+            eprintln!("XXX definition 4");
             self.reset_ufo(sexp as *mut c_void).unwrap();
+            eprintln!("XXX definition 5");
             shared_data.as_ref().unwrap().set_ignore(false);
         }}
+
+        eprintln!("XXX definition 6");
 
         Ok(ufo)
     }
@@ -492,20 +517,26 @@ impl UfoDefinition {
 
         let writeback_listener: Option<Box<dyn Fn(UfoWriteListenerEvent) + Sync + Send>> = 
             if self.writeback.is_some() || self.reset.is_some() || self.destroy.is_some() {
+
+                eprintln!("DOING WRITEBACK THINGS NAO!!! 1");
+
                 let system = self.system.clone();
                 let writeback = self.writeback;
                 let reset = self.reset;
                 let destroy = self.destroy;
                 let shared_data = self.shared_data.clone();
+
+                eprintln!("DOING WRITEBACK THINGS NAO!!! 2");
                 
                 Some(Box::new(
                     move |event: UfoWriteListenerEvent| {
+                        eprintln!("DOING WRITEBACK THINGS NAO!!! 3");
                         if let Some(shared_data) = shared_data.as_ref() {
                             if shared_data.ignore() {
                                 return;
                             }
                         }
-                        // eprintln!("DOING WRITEBACK THINGS NAO!!!");
+                        eprintln!("DOING WRITEBACK THINGS NAO!!! 4");
                         match event {
                             UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
                                 writeback.map(|token| unsafe {
@@ -513,8 +544,10 @@ impl UfoDefinition {
                                     system.sandbox_writeback(token, start_idx, end_idx, data)
                                 }),
                             UfoWriteListenerEvent::Reset =>  {
-                                // eprintln!("reset");
-                                reset.map(|token| system.sandbox_reset(token))
+                                eprintln!("reset");
+                                let x = reset.map(|token| system.sandbox_reset(token));
+                                eprintln!("after reset");
+                                x
                             }
                             UfoWriteListenerEvent::UfoWBDestroy => {
                                 // eprintln!("destroy");

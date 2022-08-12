@@ -105,12 +105,14 @@ ufo_vector_constructor <- function(mode, length, populate,
     # destroy <- compile(destroy)
 
     system <- get_or_create(.ufo_core)
+    print("XXX before");
     vector<-system$new_ufo(mode = mode, length = length,
                              user_data = list(...),
                              populate = populate, writeback = writeback,
                              reset = reset, destroy = destroy,
                              finalizer = finalizer, read_only = read_only,
                              chunk_length = chunk_length)
+    print("XXX after");
 
     if ((missing(add_class) && isTRUE(getOption("ufos.add_class", TRUE)))
        || (!missing(add_class) && isTRUE(add_class))) {

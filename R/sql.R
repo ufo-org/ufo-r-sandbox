@@ -49,6 +49,7 @@ sqlite_column_length <- function(db, table, column, ...)  {
     column_length$`COUNT(*)`
 }
 
+
 # Start and end are zero-indexed
 sqlite_populate_vector <- function(db, start, end, table, column, constructor, converter, ...) {
 
@@ -83,6 +84,7 @@ sqlite_populate_vector <- function(db, start, end, table, column, constructor, c
     # print(output)
 
     DBI::dbClearResult(result)
+    DBI::dbDisconnect(connection)
     output
 }
 
@@ -131,11 +133,77 @@ sqlite_populate_logical <- function(db, start, end, table, column, ...) {
     )
 }
 
+sqlite_get_table_indices <- function(connection, table, start, end) {
+    result <- DBI::dbSendQuery(connection, paste0(
+        "SELECT __ufo_index, __table_index FROM (", 
+            "SELECT ROW_NUMBER() OVER(ORDER BY ROWID) __ufo_index, ",   # ROWID is 1-indexed
+                "ROWID as __table_index",
+            " FROM ", DBI::dbQuoteIdentifier(connection, table), 
+        ") WHERE __ufo_index > ", start, " AND  __ufo_index <= ", end)) 
+
+    ufo_index=integer(0)
+    table_index=integer(0)
+    cursor <- as.integer(0)
+
+    while (!DBI::dbHasCompleted(result)) {
+        data <- DBI::dbFetch(result)
+        end_position <- cursor + as.integer(nrow(data))
+        ufo_index[cursor:end_position] <- as.integer(data[, "__ufo_index"])
+        table_index[cursor:end_position] <- as.integer(data[, "__table_index"])
+    }
+
+    DBI::dbClearResult(result)
+
+    # Lookup: x[x$ufo_index==3, ]$table_index
+    data.frame(ufo_index=ufo_index, table_index=table_index)
+}
+
+sqlite_update_value <- function(connection, table, column, index, value) {    
+    result <- DBI::dbSendStatement(connection, paste0(
+        "UPDATE ", DBI::dbQuoteIdentifier(connection, table), 
+        " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
+        " WHERE rowid == ", DBI::dbQuoteLiteral(index)))
+
+    #DBI::dbGetRowsAffected(result)
+    DBI::dbClearResult(result)    
+}
+
+sqlite_update_values <- function(connection, table, column, start, end, indices, data) {
+    for (index in start:end) {        
+        table_index <- indices[indices$ufo_index==index, ]$table_index
+        sqlite_update_value(
+            connection=connection, table=table, column=column, 
+            index=table_index, data=data[index]
+        ) 
+    }
+}
+
+#constructor, converter,
+sqlite_writeback <- function(db, start, end, data, table, column, ...) {
+    print("WRITEBACK")
+    print(paste0("db:          ", db))
+    print(paste0("start:       ", start))
+    print(paste0("end:         ", end))
+    print(paste0("table:       ", table))
+    print(paste0("column:      ", column))
+    print(paste0("...:         ", list(...)))
+
+    connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
+
+    DBI::dbBegin(connection)
+    indices <- sqlite_get_table_indices(connection, table, start, end)
+    sqlite_update_values(connection, table, column, start, end, indices, data)
+    DBI::dbCommit(connection)
+    DBI::dbDisconnect(connection)
+}
+
 #' Creates a UFO object of representing a column from an SQL database.
 #' @param db database connection information
 #' @param table the name of the table in the database
 #' @param column the name of the column in the database
 #' @param driver a string describing the database driver, one of: SQLite
+#' @param writeback a logical value instructing the vector to pass changes 
+#'                  back into the database: TRUE or FALSE
 #' @param read_only sets the vector to be write-protected by the OS
 #'                  (optional, false by default).
 #' @param chunk_length the minimum number of elements loaded at once,
@@ -145,7 +213,7 @@ sqlite_populate_logical <- function(db, start, end, table, column, ...) {
 #' @return a ufo vector lazily populated with the values of the specified
 #'         column
 #' @export
-ufo_sql_column <- function(db, table, column, ..., driver = "SQLite") {
+ufo_sql_column <- function(db, table, column, ..., writeback = FALSE, driver = "SQLite") {
 
     column_type <- NULL
     column_length <- NULL
@@ -166,15 +234,20 @@ ufo_sql_column <- function(db, table, column, ..., driver = "SQLite") {
         else { 
             stop("Column \"", column, "\" from table \"", table,"\" has type ",
                  type, " which cannot be represented as a UFO. ",
-                 "It has to be one of: integer, numeric, raw, character, "
+                 "It has to be one of: integer, numeric, raw, character, ",
                  "or logical.")
         }
+
+    writeback <- if (writeback) { sqlite_writeback } else { NULL }
+    print("XXX")
+    print(writeback)
 
     # populate(db=db, start=1, end=column_length + 1, table=table, column=column, ...)
 
     ufo_vector_constructor(mode = column_type, length = column_length,
-               populate = populate, 
-               db = db, table = table, column = column,
+               populate = populate, writeback = writeback, 
+               db = db, table = table, column = column, 
+               reset = NULL, destroy = NULL, finalizer = NULL,
                ...
     )
 }
@@ -205,3 +278,4 @@ ufo_sql_table <- function(db, table, ..., driver = "SQLite") {
     result <- lapply(columns, function(column) ufo_sql_column(db, table, column, ..., driver))
     names(result) <- columns
 }
+
