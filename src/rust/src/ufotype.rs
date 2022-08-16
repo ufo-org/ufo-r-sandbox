@@ -62,11 +62,11 @@ impl UfoType {
 
     pub fn convert_to_data(&self, result: Vec<GenericValueBoxed>) -> Result<Vec<u8>> {
         match self {
-            UfoType::Integer | 
-            UfoType::Numeric | 
-            UfoType::Complex | 
-            UfoType::Boolean | 
-            UfoType::Raw       => {
+            UfoType::Integer
+            | UfoType::Numeric
+            | UfoType::Complex
+            | UfoType::Boolean
+            | UfoType::Raw => {
                 let bytes = result.into_iter().exactly_one()
                     .map_err(|_e| r_error!("Expecting a function returning {} to send back a single byte vector as response", self))?
                     .expect_bytes_into()
@@ -74,9 +74,9 @@ impl UfoType {
                 Ok(bytes)
             }
             UfoType::Character => self.convert_strings_to_data(result),
-            UfoType::Vector    => todo!(),
+            UfoType::Vector => todo!(),
         }
-    }    
+    }
 
     fn convert_strings_to_data(&self, result: Vec<GenericValueBoxed>) -> Result<Vec<u8>> {
         // The types *const T, &T, Box<T>, Option<&T>, and Option<Box<T>> all
@@ -86,33 +86,42 @@ impl UfoType {
         // let strings = result.deserialize_into(Rtype::Strings)?.as_str_iter()
         //     .rewrap(|| "Cannot cast result into String of vectors, even though expecting a vector")?;
 
-        let strings = result.into_iter()
+        let strings = result
+            .into_iter()
             .map(|v| v.expect_string_into())
             .collect::<std::result::Result<Vec<String>, UnexpectedGenericType>>()
-            .rewrap(|| r_error!("Expecting a function returning {} to send back a vector of strings", self))?;
-        
+            .rewrap(|| {
+                r_error!(
+                    "Expecting a function returning {} to send back a vector of strings",
+                    self
+                )
+            })?;
+
         //r_bail_if!(unsafe { libR_sys::R_gc_running() == 1 } => "Cannot allocate character vectors when the GC is running.");
 
-        let bytes: Vec<u8> = strings.into_iter().flat_map(|string| {
-            // println!("str: {:?}", string);   
-            let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
-            // let character_vector = unsafe { r!(string).get() };
-            // println!("character_vector: {:?}", character_vector);
-            let ne_bytes = (character_vector as usize).to_ne_bytes();
-            // println!("character_vector as ne_bytes: {:?}", ne_bytes);
-            ne_bytes
-        }).collect();
+        let bytes: Vec<u8> = strings
+            .into_iter()
+            .flat_map(|string| {
+                // println!("str: {:?}", string);
+                let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
+                                                                                           // let character_vector = unsafe { r!(string).get() };
+                                                                                           // println!("character_vector: {:?}", character_vector);
+                let ne_bytes = (character_vector as usize).to_ne_bytes();
+                // println!("character_vector as ne_bytes: {:?}", ne_bytes);
+                ne_bytes
+            })
+            .collect();
 
         Ok(bytes)
     }
 
     pub fn pack_for_transport(&self, result: Robj) -> Result<Vec<GenericValueBoxed>> {
         match self {
-            UfoType::Integer |
-            UfoType::Numeric |
-            UfoType::Complex |
-            UfoType::Boolean |
-            UfoType::Raw       => {
+            UfoType::Integer
+            | UfoType::Numeric
+            | UfoType::Complex
+            | UfoType::Boolean
+            | UfoType::Raw => {
                 let size: usize = result.len() * self.element_size();
                 let slice: &[u8] = unsafe {
                     let data_ptr = libR_sys::DATAPTR_RO(result.get());
@@ -122,13 +131,19 @@ impl UfoType {
                 Ok(vec![GenericValueBoxed::Vbytes(vector)])
             }
             UfoType::Character => self.pack_strings_for_transport(result),
-            UfoType::Vector    => todo!(),
+            UfoType::Vector => todo!(),
         }
     }
 
     pub fn pack_strings_for_transport(&self, result: Robj) -> Result<Vec<GenericValueBoxed>> {
-        let strings: Vec<GenericValueBoxed> = result.as_str_iter()
-            .rewrap(|| r_error!("A function returning {} was unable to construct a string iterator", self))?
+        let strings: Vec<GenericValueBoxed> = result
+            .as_str_iter()
+            .rewrap(|| {
+                r_error!(
+                    "A function returning {} was unable to construct a string iterator",
+                    self
+                )
+            })?
             .map(|s| GenericValueBoxed::Vstring(s.to_owned()))
             .collect();
         Ok(strings)
@@ -138,7 +153,7 @@ impl UfoType {
 impl TryFrom<&Rtype> for UfoType {
     type Error = Error;
     fn try_from(value: &Rtype) -> Result<Self> {
-        match value {            
+        match value {
             //Rtype::Rstr => todo!(),
             Rtype::Logicals => Ok(Self::Boolean),
             Rtype::Integers => Ok(Self::Integer),
@@ -164,7 +179,10 @@ impl TryFrom<&str> for UfoType {
             "boolean" | "logical" => Ok(Self::Boolean),
             "vector" => Ok(Self::Vector),
             "raw" => Ok(Self::Raw),
-            t => Err(Error::Other(format!("Expected integer, numeric, character, complex, or boolean, but found {}", t)))
+            t => Err(Error::Other(format!(
+                "Expected integer, numeric, character, complex, or boolean, but found {}",
+                t
+            ))),
         }
     }
 }
@@ -189,7 +207,16 @@ pub trait UfoTypeChecker {
 
 impl UfoTypeChecker for UfoType {
     fn check_against(&self, object: &Robj) -> bool {
-        matches!((self, object.rtype()), (UfoType::Integer, Rtype::Integers) | (UfoType::Numeric, Rtype::Doubles) | (UfoType::Character, Rtype::Strings) | (UfoType::Complex, Rtype::Complexes) | (UfoType::Boolean, Rtype::Logicals) | (UfoType::Raw, Rtype::Raw) | (UfoType::Vector, Rtype::List))
+        matches!(
+            (self, object.rtype()),
+            (UfoType::Integer, Rtype::Integers)
+                | (UfoType::Numeric, Rtype::Doubles)
+                | (UfoType::Character, Rtype::Strings)
+                | (UfoType::Complex, Rtype::Complexes)
+                | (UfoType::Boolean, Rtype::Logicals)
+                | (UfoType::Raw, Rtype::Raw)
+                | (UfoType::Vector, Rtype::List)
+        )
     }
 }
 
@@ -202,4 +229,3 @@ impl UfoTypeChecker for Option<UfoType> {
         }
     }
 }
-

@@ -1,28 +1,16 @@
-use std::ptr::copy_nonoverlapping;
-use std::string;
-
-// use crate::r_bail;
-// use crate::r_or_bail;
-use crate::r_error;
-use crate::r_err;
 use crate::r_bail_if;
+use crate::r_err;
+use crate::r_error;
 use crate::typer::RtypeTools;
 
 use extendr_api::*;
-use libR_sys::DATAPTR;
-// use libR_sys::INTEGER;
-// use libR_sys::REAL;
-// use libR_sys::RAW;
-// use libR_sys::LOGICAL;
-use libR_sys::SEXPREC;
-use libR_sys::XLENGTH;
+use libR_sys::Rf_allocVector;
 use libR_sys::Rf_mkChar;
 use libR_sys::Rf_protect;
 use libR_sys::Rf_unprotect;
-use libR_sys::Rf_allocVector;
+use libR_sys::DATAPTR;
 use libR_sys::SET_STRING_ELT;
-use libR_sys::SEXPTYPE;
-use libc::c_void;
+use libR_sys::XLENGTH;
 use ufo_ipc::GenericValue;
 
 pub trait SerdeR {
@@ -45,7 +33,7 @@ impl SerdeR for &Robj {
                 but produced {:?}. \
                 Serialized form: {:?}", 
             Rtype::Raw, vector, self);
-        let raw = vector.as_raw().unwrap();        
+        let raw = vector.as_raw().unwrap();
         Ok(Vec::from(raw.as_slice()))
     }
 }
@@ -60,7 +48,10 @@ pub trait DeserdeR: Sized {
                    expecting R object of type {:?}, \
                    but encountered {:?}. \
                    Serialized form: {:?}",
-                expected_type, object.rtype(), object)
+                expected_type,
+                object.rtype(),
+                object
+            )
         } else {
             Ok(object)
         }
@@ -69,14 +60,22 @@ pub trait DeserdeR: Sized {
 
 impl DeserdeR for &[u8] {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!("Calling unserializer on {:?}{}", self.iter().take(10).collect::<Vec<&u8>>(), if self.len() > 10 { ".." } else { "" });
+        eprintln!(
+            "Calling unserializer on {:?}{}",
+            self.iter().take(10).collect::<Vec<&u8>>(),
+            if self.len() > 10 { ".." } else { "" }
+        );
         call!("unserialize", self)
     }
 }
 
 impl DeserdeR for &Vec<u8> {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!("Calling unserializer on {:?}{}", self.iter().take(10).collect::<Vec<&u8>>(), if self.len() > 10 { ".." } else { "" });
+        eprintln!(
+            "Calling unserializer on {:?}{}",
+            self.iter().take(10).collect::<Vec<&u8>>(),
+            if self.len() > 10 { ".." } else { "" }
+        );
         eprintln!("Calling unserializer on {self:?}");
         call!("unserialize", self)
     }
@@ -84,12 +83,20 @@ impl DeserdeR for &Vec<u8> {
 
 impl DeserdeR for Vec<u8> {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!("Calling unserializer on {:?}{}", self.iter().take(10).collect::<Vec<&u8>>(), if self.len() > 10 { ".." } else { "" });
+        eprintln!(
+            "Calling unserializer on {:?}{}",
+            self.iter().take(10).collect::<Vec<&u8>>(),
+            if self.len() > 10 { ".." } else { "" }
+        );
         call!("unserialize", self)
     }
 }
 
-impl<Tv, Ts> DeserdeR for GenericValue<Tv, Ts> where Tv: DeserdeR, Ts: ToVectorValue {
+impl<Tv, Ts> DeserdeR for GenericValue<Tv, Ts>
+where
+    Tv: DeserdeR,
+    Ts: ToVectorValue,
+{
     fn deserialize(self) -> Result<Robj> {
         Ok(match self {
             GenericValue::Vu8(value) => Robj::from(value),
@@ -113,8 +120,11 @@ impl<Tv, Ts> DeserdeR for GenericValue<Tv, Ts> where Tv: DeserdeR, Ts: ToVectorV
     }
 }
 
-
-impl<Tv, Ts> SmartDeserialization for GenericValue<Tv, Ts> where Tv: SmartDeserialization , Ts: AsRef<str> {
+impl<Tv, Ts> SmartDeserialization for GenericValue<Tv, Ts>
+where
+    Tv: SmartDeserialization,
+    Ts: AsRef<str>,
+{
     fn smart_deserialize(&self) -> Result<Robj> {
         Ok(match self {
             GenericValue::Vu8(value) => Robj::from(value),
@@ -140,14 +150,18 @@ impl<Tv, Ts> SmartDeserialization for GenericValue<Tv, Ts> where Tv: SmartDeseri
 
 impl SmartDeserialization for &[u8] {
     fn smart_deserialize(&self) -> Result<Robj> {
-        eprintln!("Calling smaert_deserializer on {:?}{}", self.iter().take(10).collect::<Vec<&u8>>(), if self.len() > 10 { ".." } else { "" });
-        
+        eprintln!(
+            "Calling smaert_deserializer on {:?}{}",
+            self.iter().take(10).collect::<Vec<&u8>>(),
+            if self.len() > 10 { ".." } else { "" }
+        );
+
         let sxp = i32::from_le_bytes(self[0..4].try_into().unwrap());
         eprintln!("DESER SEXPTYPE {sxp}");
         let usize_size_in_bytes = usize::BITS as usize / 8;
         let length = usize::from_le_bytes(self[4..(4 + usize_size_in_bytes)].try_into().unwrap());
-        
-        eprintln!("DESER length {length}");       
+
+        eprintln!("DESER length {length}");
         let data = &self[4 + usize_size_in_bytes..];
         eprintln!("DESER data {data:?}");
 
@@ -156,8 +170,7 @@ impl SmartDeserialization for &[u8] {
         let elements = length / rtype.element_size().unwrap();
 
         match rtype {
-            Rtype::Logicals | Rtype::Integers | Rtype::Doubles |
-            Rtype::Complexes | Rtype::Raw => {
+            Rtype::Logicals | Rtype::Integers | Rtype::Doubles | Rtype::Complexes | Rtype::Raw => {
                 let vector = Robj::alloc_vector(sxp as u32, length);
                 unsafe {
                     let vector_data: *mut u8 = DATAPTR(vector.get()) as *mut u8;
@@ -166,12 +179,16 @@ impl SmartDeserialization for &[u8] {
                 Ok(vector)
             }
             Rtype::Strings => {
-                let /*mut*/ strings_sexp = unsafe { Rf_protect(Rf_allocVector(sxp as u32, elements as isize)) }; 
+                let /*mut*/ strings_sexp = unsafe { Rf_protect(Rf_allocVector(sxp as u32, elements as isize)) };
                 let mut cursor = 0;
                 let mut string_index = 0;
                 while cursor < data.len() {
                     eprintln!("DESER cursor at {cursor}");
-                    let character_length = usize::from_le_bytes(data[cursor..cursor + usize_size_in_bytes].try_into().unwrap());
+                    let character_length = usize::from_le_bytes(
+                        data[cursor..cursor + usize_size_in_bytes]
+                            .try_into()
+                            .unwrap(),
+                    );
                     eprintln!("DESER character_length {character_length}");
                     cursor += usize_size_in_bytes;
                     eprintln!("DESER cursor at {cursor}");
@@ -179,20 +196,24 @@ impl SmartDeserialization for &[u8] {
                     eprintln!("DESER character_data {character_data:?}");
                     cursor += character_length;
                     eprintln!("DESER cursor at {cursor}");
-                    let character_vector = character_data.iter().map(|u| (*u) as char).collect::<Vec<char>>();
-                    eprintln!("String!!!: {:?}",  character_vector);
-                    let character_sexp = unsafe { Rf_protect(Rf_mkChar(character_data.as_ptr() as *const i8)) };
-                    eprintln!("String sexp: {:?}",  Robj::from_sexp(character_sexp));
+                    let character_vector = character_data
+                        .iter()
+                        .map(|u| (*u) as char)
+                        .collect::<Vec<char>>();
+                    eprintln!("String!!!: {:?}", character_vector);
+                    let character_sexp =
+                        unsafe { Rf_protect(Rf_mkChar(character_data.as_ptr() as *const i8)) };
+                    eprintln!("String sexp: {:?}", Robj::from_sexp(character_sexp));
                     unsafe { SET_STRING_ELT(strings_sexp, string_index, character_sexp) }
-                    string_index+=1;
+                    string_index += 1;
                 }
 
                 let strings = Robj::from_sexp(strings_sexp);
                 unsafe { Rf_unprotect(1 + string_index as i32) }
                 eprintln!("DESER produced string vector: {strings:?}");
                 Ok(strings)
-            }  
-            
+            }
+
             rtype => {
                 panic!("Unsupported vector type: {:?}", rtype) // TODO better error
             }
@@ -202,13 +223,13 @@ impl SmartDeserialization for &[u8] {
 
 impl SmartDeserialization for &Vec<u8> {
     fn smart_deserialize(&self) -> Result<Robj> {
-       self.as_slice().smart_deserialize()
+        self.as_slice().smart_deserialize()
     }
 }
 
 impl SmartDeserialization for Vec<u8> {
     fn smart_deserialize(&self) -> Result<Robj> {
-       self.as_slice().smart_deserialize()
+        self.as_slice().smart_deserialize()
     }
 }
 
@@ -227,19 +248,25 @@ impl SmartSerialization for Rtype {
 
         let mut vector = Vec::new();
         vector.extend_from_slice(&self.as_sxp().to_le_bytes());
-        vector.extend_from_slice(&length_in_bytes.to_le_bytes());       
+        vector.extend_from_slice(&length_in_bytes.to_le_bytes());
 
         match self {
-            Rtype::Strings => {                              
-                let sexp_data: &[SEXP] = unsafe { std::slice::from_raw_parts(memory as *const SEXP, elements) };
+            Rtype::Strings => {
+                let sexp_data: &[SEXP] =
+                    unsafe { std::slice::from_raw_parts(memory as *const SEXP, elements) };
                 println!("SEXP data: {:?}", sexp_data);
-                for character_sexp in sexp_data {                    
-
+                for character_sexp in sexp_data {
                     let character_length = unsafe { XLENGTH(*character_sexp) as usize };
-                    let character_data = unsafe{ DATAPTR(*character_sexp as SEXP) as *const u8 };
-                    let character_bytes: &[u8] = unsafe { std::slice::from_raw_parts(character_data, character_length) };
+                    let character_data = unsafe { DATAPTR(*character_sexp as SEXP) as *const u8 };
+                    let character_bytes: &[u8] =
+                        unsafe { std::slice::from_raw_parts(character_data, character_length) };
 
-                    unsafe { eprintln!("String!: {:?}",  std::ffi::CStr::from_ptr(character_data as *const i8)); }
+                    unsafe {
+                        eprintln!(
+                            "String!: {:?}",
+                            std::ffi::CStr::from_ptr(character_data as *const i8)
+                        );
+                    }
 
                     vector.extend_from_slice(&(character_length + 1).to_le_bytes());
                     vector.extend_from_slice(character_bytes);
@@ -248,11 +275,13 @@ impl SmartSerialization for Rtype {
             }
 
             Rtype::Integers | Rtype::Logicals | Rtype::Doubles | Rtype::Complexes | Rtype::Raw => {
-                eprintln!("{:?} ... len: {} bytes: {}", self, elements, length_in_bytes);
-                let bytes: &[u8] = unsafe { 
-                    std::slice::from_raw_parts(memory as *const u8, length_in_bytes) 
-                };
-                vector.extend_from_slice(bytes);    
+                eprintln!(
+                    "{:?} ... len: {} bytes: {}",
+                    self, elements, length_in_bytes
+                );
+                let bytes: &[u8] =
+                    unsafe { std::slice::from_raw_parts(memory as *const u8, length_in_bytes) };
+                vector.extend_from_slice(bytes);
             }
 
             rtype => {
@@ -261,5 +290,5 @@ impl SmartSerialization for Rtype {
         }
 
         vector
-    }    
+    }
 }
