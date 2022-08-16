@@ -265,8 +265,11 @@ impl UfoSystem {
             .map(|function| function.serialize())
             .extract_result()?;
         let writeback_token = serialized_writeback.map(|serialized_function| {
-                self.sandbox.register_procedure(serialized_function, data_token, &["start", "end", "data"])
-            }).extract_result()?;
+            self.sandbox.register_procedure(serialized_function, data_token, &["start", "end", "data"])
+        }).extract_result()?;
+
+        eprintln!("WBToken: {:?} ", writeback_token);
+        
 
         let serialized_reset = reset
             .map(|function| function.serialize())
@@ -338,12 +341,12 @@ impl UfoSystem {
     /// # Safety
     /// Function operates on raw pointer to area of memory. The contents are written to from a deserialized byte vector retrieved from sandbox.
     pub unsafe fn sandbox_populate(&self, token: FunctionToken, return_type: UfoType, start: usize, end: usize, memory: *mut u8) -> std::result::Result<(), UfoPopulateError> {
-        // eprintln!("UfoSystem::sandbox_populate:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
-        // eprintln!("   start:          {:?}", start);
-        // eprintln!("   end:            {:?}", end);
-        // eprintln!("   memory:         {:?}", memory);
+        eprintln!("UfoSystem::sandbox_populate:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   start:          {:?}", start);
+        eprintln!("   end:            {:?}", end);
+        eprintln!("   memory:         {:?}", memory);
 
         let result = self.sandbox
             .call_function(token, &[GenericValue::Vusize(start), GenericValue::Vusize(end)])
@@ -366,15 +369,22 @@ impl UfoSystem {
 
     /// # Safety
     /// Function operates on raw pointer to area of memory. The contents are serialized and sent to sandbox.
-    pub unsafe fn sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8) {
-        // eprintln!("UfoSystem::sandbox_writeback:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
-        // eprintln!("   start:          {:?}", start);
-        // eprintln!("   end:            {:?}", end);
-        // eprintln!("   memory:         {:?}", memory);
+    pub unsafe fn 
+    sandbox_writeback(&self, token: FunctionToken, start: usize, end: usize, memory: *const u8, vector_type: Rtype) {
+        eprintln!("UfoSystem::sandbox_writeback:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   start:          {:?}", start);
+        eprintln!("   end:            {:?}", end);
+        eprintln!("   memory:         {:?}", memory);
+        eprintln!("   vector_type:    {:?}", vector_type);
+        
+        
+        let serialized_data = vector_type.smart_serialize(memory, end - start);
 
-        let data = GenericValue::Vbytes(std::slice::from_raw_parts(memory, end - start));
+        eprintln!("   serialized:     {:?}", serialized_data);
+
+        let data = GenericValue::Vbytes(serialized_data.as_slice());
         let start = GenericValue::Vusize(start);
         let end = GenericValue::Vusize(end);
         // let event_type = GenericValue::Vstring("writeback");
@@ -388,9 +398,9 @@ impl UfoSystem {
     }
 
     pub fn sandbox_reset(&self, token: FunctionToken) {
-        // eprintln!("UfoSystem::sandbox_reset:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
+        eprintln!("UfoSystem::sandbox_reset:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
 
         // let event_type = GenericValue::Vstring("reset");
         let result = self.sandbox
@@ -401,9 +411,9 @@ impl UfoSystem {
     }
 
     pub fn sandbox_destroy(&self, token: FunctionToken) {
-        // eprintln!("UfoSystem::sandbox_destroy:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
+        eprintln!("UfoSystem::sandbox_destroy:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
 
         // let event_type = GenericValue::Vstring("destroy");
         let result = self.sandbox
@@ -464,8 +474,8 @@ impl SharedUfoRuntimeDataAPI for SharedUfoRuntimeData {
 
 impl UfoDefinition {
     pub fn prototype(&self) -> Result<UfoObjectParams> {
-        // eprintln!("UfoDefinition::prototype:");
-        // eprintln!("   self:           {:?}", self);
+        eprintln!("UfoDefinition::prototype:");
+        eprintln!("   self:           {:?}", self);
 
         r_bail_if!(!self.vector_type.is_vector() => "UFO needs to be a vector type");
 
@@ -515,6 +525,8 @@ impl UfoDefinition {
                 })
             };
 
+            eprintln!("Populate {:?}", self.populate);
+
         let writeback_listener: Option<Box<dyn Fn(UfoWriteListenerEvent) + Sync + Send>> = 
             if self.writeback.is_some() || self.reset.is_some() || self.destroy.is_some() {
 
@@ -525,8 +537,9 @@ impl UfoDefinition {
                 let reset = self.reset;
                 let destroy = self.destroy;
                 let shared_data = self.shared_data.clone();
+                let vector_type = self.vector_type.copy();
 
-                eprintln!("DOING WRITEBACK THINGS NAO!!! 2");
+                eprintln!("DOING WRITEBACK THINGS NAO!!! 2 {writeback:?} {reset:?} {destroy:?}");
                 
                 Some(Box::new(
                     move |event: UfoWriteListenerEvent| {
@@ -538,18 +551,23 @@ impl UfoDefinition {
                         }
                         eprintln!("DOING WRITEBACK THINGS NAO!!! 4");
                         match event {
-                            UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => 
+                            UfoWriteListenerEvent::Writeback { start_idx, end_idx, data } => {
+                                eprintln!("DOING WRITEBACK THINGS NAO!!! WB");
+                                let vector_type = vector_type.copy();
                                 writeback.map(|token| unsafe {
-                                    // eprintln!("wb");
-                                    system.sandbox_writeback(token, start_idx, end_idx, data)
-                                }),
+                                    eprintln!("wb: {token:?}, {start_idx:?}, {end_idx:?}, {return_type} {:?}", vector_type);
+                                    system.sandbox_writeback(token, start_idx, end_idx, data, vector_type)
+                                })
+                            }
                             UfoWriteListenerEvent::Reset =>  {
+                                eprintln!("DOING WRITEBACK THINGS NAO!!! RES");
                                 eprintln!("reset");
                                 let x = reset.map(|token| system.sandbox_reset(token));
                                 eprintln!("after reset");
                                 x
                             }
                             UfoWriteListenerEvent::UfoWBDestroy => {
+                                eprintln!("DOING WRITEBACK THINGS NAO!!! DSTR");
                                 // eprintln!("destroy");
                                 destroy.map(|token| system.sandbox_destroy(token))
                             }
@@ -591,11 +609,21 @@ impl UfoDefinition {
     }
 
     pub fn finalize(&self) -> Result<()> {
-        // eprintln!("UfoDefinition::finalize:");
-        // eprintln!("   self:           {:?}", self);
+        eprintln!("UfoDefinition::finalize:");
+        eprintln!("   self:           {:?}", self);
 
         if let Some(finalizer) = self.finalizer {
             self.system.sandbox.call_procedure(finalizer, &[])?;
+        }
+
+        Ok(())
+    }
+
+    pub fn free_assets(&self) -> Result<()> {
+        eprintln!("UfoDefinition::free_assets:");
+        eprintln!("   self:           {:?}", self);
+
+        if let Some(finalizer) = self.finalizer {
             self.system.sandbox.free_function(&finalizer)?;
         }
 

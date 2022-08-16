@@ -15,7 +15,7 @@ pub use ufo_ipc::FunctionToken;
 
 use extendr_api::*;
 
-use crate::serder::DeserdeR;
+use crate::serder::{DeserdeR, SmartDeserialization};
 use crate::ufotype::{UfoType, UfoTypeChecker};
 use crate::{r_error, r_bail_if}; // r_err, r_bail};
 use crate::errors::*;
@@ -45,10 +45,10 @@ impl Server {
     }
 
     fn define_data(&mut self, token: DataToken, value: Vec<u8>) -> Result<()> {
-        // eprintln!("Server::define_data:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
-        // eprintln!("   value:          {:?}", value);
+        eprintln!("Server::define_data:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   value:          {:?}", value);
 
         r_bail_if!(self.objects.contains_key(&token) => 
             "Sandbox server error: Cannot define user data {:?} because it is already defined.", token);        
@@ -62,9 +62,9 @@ impl Server {
     }
 
     fn free_data(&mut self, token: DataToken) -> Result<()> {        
-        // eprintln!("Server::free_data:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
+        eprintln!("Server::free_data:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
 
         self.objects.remove(&token)
             .rewrap(|| format!("Sandbox server error: Cannot remove user data {:?} because it does not exist", token))?;
@@ -72,12 +72,12 @@ impl Server {
     }
 
     fn define_function(&mut self, token: FunctionToken, user_data: DataToken, function: Vec<u8>, parameters: VecDeque<String>, return_type: Option<&String>) -> Result<()> {
-        // eprintln!("Server::define_function:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
-        // eprintln!("   user_data:      {:?}", user_data);
+        eprintln!("Server::define_function:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   user_data:      {:?}", user_data);
         // eprintln!("   function:       {:?}", function);
-        // eprintln!("   parameters:     {:?}", parameters);
+        eprintln!("   parameters:     {:?}", parameters);
 
         r_bail_if!(!self.objects.contains_key(&user_data) => 
             "Sandbox server error: Cannot define function {:?} because user data {:?} does not exist.", token, user_data);
@@ -98,31 +98,37 @@ impl Server {
         Ok(())
     }
 
-    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<Vec<GenericValueBoxed>> where Tv: DeserdeR + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug {
-        // eprintln!("Server::call_function:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);
-        // eprintln!("   arguments:      {:?}", arguments);
+    fn call_function<Tv, Ts>(&mut self, token: FunctionToken, arguments: Vec<GenericValue<Tv, Ts>>) -> Result<Vec<GenericValueBoxed>> where Tv: DeserdeR + SmartDeserialization + std::fmt::Debug, Ts: ToVectorValue + std::fmt::Debug + AsRef<str> {
+        eprintln!("Server::call_function:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);
+        eprintln!("   arguments:      {:?}", arguments);
 
         let function = self.functions.get(&token)
             .rewrap(|| format!("Sandbox server error: Cannot call function {:?} because it is not defined.", token))?;
 
-        // eprintln!("   function:       {:?}", function);
+        eprintln!("   function:       {:?}", function);
 
         r_bail_if!(function.parameters.len() != arguments.len() => // 2 arguments are tacked on: user_function and user_data
             "Sandbox server error: Cannot call function {:?} because the number of arguments {} does not match the expected {}", 
             token, arguments.len(), function.parameters.len());
 
+            eprintln!("X");
+
         let user_data = self.objects.get(&function.user_data)
             .rewrap(|| format!("Sandbox server error: Cannot call function {:?} because its user data {:?} is not defined.",
             token, function.user_data))?;
 
+            eprintln!("X");
+
         let deserialized_arguments = arguments.into_iter()
-            .map(|generic| generic.deserialize())
+            .map(|generic| {eprintln!("-"); let x= generic.smart_deserialize(); eprintln!("{x:?}"); x })
             .collect::<Result<Vec<Robj>>>()?;
 
-        // println!("USER_DATA:  {:?}", user_data);
-        // println!("PARAMETERS: {:?}", function.parameters);
+            eprintln!("X");
+
+        println!("USER_DATA:  {:?}", user_data);
+        println!("PARAMETERS: {:?}", function.parameters);
  
         // Needed to shorten the lifetimes from 'static to '_.
         let user_data = user_data.iter()
@@ -136,38 +142,45 @@ impl Server {
                 .collect::<Vec<(&str, Robj)>>()
         );
 
-        // eprintln!("Calling runtime: do.call({:?}, {:?}", function.executable, pairs);
+        eprintln!("Calling runtime: do.call({:?}, {:?}", function.executable, pairs);
 
         let result= call!("do.call", &function.executable, pairs)?;
-        // eprintln!("   result:         {:?}", result);
+        eprintln!("   result:         {:?}", result);
 
         // let serialized_result = result.serialize()?;        
         // eprintln!("   serialized:     {:?}", serialized_result);
 
-        r_bail_if!(!function.return_type.check_against(&result) => 
-            "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} of type {:?} into vector of expected type {:?}", 
-            token, result, result.rtype(), function.return_type);
+        if let Some(return_type) = function.return_type {
 
-        let result = function.return_type
-            .map(|ty| ty.pack_for_transport(result))
-            .unwrap_or_else(|| Ok(Vec::new()));
+            r_bail_if!(!function.return_type.check_against(&result) => 
+                "Sandbox server error: Cannot call function {:?} because cannot convert result {:?} of type {:?} into vector of expected type {:?}", 
+                token, result, result.rtype(), function.return_type);
 
-        //let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
-        // let slice: &[u8] = unsafe {
-        //     let data_ptr = libR_sys::DATAPTR_RO(result.get());
-        //     std::slice::from_raw_parts(data_ptr as *const u8, size)
-        // };
+            let result = function.return_type
+                .map(|ty| ty.pack_for_transport(result))
+                .unwrap_or_else(|| Ok(Vec::new()));
 
-        // eprintln!("SENDING BACK RESULT :: {:?}", result);
+            //let size: usize = result.len() * function.return_type.map_or(0, |ty| ty.element_size());
+            // let slice: &[u8] = unsafe {
+            //     let data_ptr = libR_sys::DATAPTR_RO(result.get());
+            //     std::slice::from_raw_parts(data_ptr as *const u8, size)
+            // };
+
+
+            eprintln!("SENDING BACK RESULT :: {:?}", result);
        
-        // Ok(serialized_result)
-        result
+            // Ok(serialized_result)
+            result
+        } else {            
+            Ok(Vec::new())
+        }
+
     }
 
     fn free_function(&mut self, token: FunctionToken) -> Result<()> {
-        // eprintln!("Server::free_function:");
-        // eprintln!("   self:           {:?}", self);
-        // eprintln!("   token:          {:?}", token);        
+        eprintln!("Server::free_function:");
+        eprintln!("   self:           {:?}", self);
+        eprintln!("   token:          {:?}", token);        
         
         self.functions.remove(&token)
             .rewrap(|| format!("Sandbox server error: Cannot remove function {:?} because it does not exist", token))?;

@@ -158,22 +158,29 @@ sqlite_get_table_indices <- function(connection, table, start, end) {
     data.frame(ufo_index=ufo_index, table_index=table_index)
 }
 
-sqlite_update_value <- function(connection, table, column, index, value) {    
-    result <- DBI::dbSendStatement(connection, paste0(
+sqlite_update_value <- function(connection, table, column, index, value) {   
+    print(paste0( "CALLING :: ",
+        "UPDATE ", DBI::dbQuoteIdentifier(connection, table),
+        " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
+        " WHERE rowid == ", index))
+    result <- DBI::dbSendStatement(connection, statement = paste0(
         "UPDATE ", DBI::dbQuoteIdentifier(connection, table), 
         " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
-        " WHERE rowid == ", DBI::dbQuoteLiteral(index)))
+        " WHERE rowid == ", index))
 
     #DBI::dbGetRowsAffected(result)
     DBI::dbClearResult(result)    
 }
 
 sqlite_update_values <- function(connection, table, column, start, end, indices, data) {
-    for (index in start:end) {        
+    for (index in (start + 1):end) {        
+        print(indices);
+        print(paste0("sqlite update value: ", index));
         table_index <- indices[indices$ufo_index==index, ]$table_index
+        print(paste0("sqlite update value at table_index: ", table_index, "<-", data[index]));
         sqlite_update_value(
             connection=connection, table=table, column=column, 
-            index=table_index, data=data[index]
+            index=table_index, value=data[index]
         ) 
     }
 }
@@ -189,10 +196,14 @@ sqlite_writeback <- function(db, start, end, data, table, column, ...) {
     print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
-
+    print(">>> ");
+    print(data);
     DBI::dbBegin(connection)
+    print("XXX1");
     indices <- sqlite_get_table_indices(connection, table, start, end)
+    print("XXX2");
     sqlite_update_values(connection, table, column, start, end, indices, data)
+    print("XXX3");
     DBI::dbCommit(connection)
     DBI::dbDisconnect(connection)
 }
@@ -265,7 +276,7 @@ ufo_sql_column <- function(db, table, column, ..., writeback = FALSE, driver = "
 #' @return a list containig ufo vectors lazily populated with the values
 #'         of individual columns in the specified table 
 #' @export
-ufo_sql_table <- function(db, table, ..., driver = "SQLite") {
+ufo_sql_table <- function(db, table, ...,  writeback = FALSE, driver = "SQLite") {
 
     columns <- NULL
 
@@ -275,7 +286,7 @@ ufo_sql_table <- function(db, table, ..., driver = "SQLite") {
         stop(paste0("Unsupported database driver: ", driver, ". Use one of: SQLite"))
     }
 
-    result <- lapply(columns, function(column) ufo_sql_column(db, table, column, ..., driver))
+    result <- lapply(columns, function(column) ufo_sql_column(db, table, column, ..., driver, writeback=writeback))
     names(result) <- columns
 }
 
