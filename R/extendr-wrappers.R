@@ -18,6 +18,8 @@ UfoSystem$shutdown <- function() invisible(.Call(wrap__UfoSystem__shutdown, self
 
 UfoSystem$new_ufo <- function(mode, length, user_data, populate, writeback, reset, destroy, finalizer, read_only, chunk_length) .Call(wrap__UfoSystem__new_ufo, self, mode, length, user_data, populate, writeback, reset, destroy, finalizer, read_only, chunk_length)
 
+UfoSystem$is_ufo <- function(object) .Call(wrap__UfoSystem__is_ufo, self, object)
+
 #' @export
 `$.UfoSystem` <- function (self, name) { func <- UfoSystem[[name]]; environment(func) <- environment(); func }
 

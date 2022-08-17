@@ -2,6 +2,7 @@
 
 S3method("$",UfoSystem)
 S3method("[[",UfoSystem)
+export(is_ufo)
 export(new_tokenizer)
 export(next_token)
 export(ufo_character)

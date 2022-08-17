@@ -196,14 +196,10 @@ sqlite_writeback <- function(db, start, end, data, table, column, ...) {
     print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
-    print(">>> ");
     print(data);
     DBI::dbBegin(connection)
-    print("XXX1");
-    indices <- sqlite_get_table_indices(connection, table, start, end)
-    print("XXX2");
-    sqlite_update_values(connection, table, column, start, end, indices, data)
-    print("XXX3");
+        indices <- sqlite_get_table_indices(connection, table, start, end)
+        sqlite_update_values(connection, table, column, start, end, indices, data)
     DBI::dbCommit(connection)
     DBI::dbDisconnect(connection)
 }

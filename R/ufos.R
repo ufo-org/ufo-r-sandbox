@@ -61,6 +61,16 @@ ufo_system_shutdown <- jeff_goldbloom;
   jeff_goldbloom(libname = libname, pkgname = pkgname)
 }
 
+#' Checks if a vector is a UFO vector (with a sandbox back-end).
+#' @param object any R object
+#' @return TRUE if the vector is a UFO created by a sandbox-backed UFO 
+#' instance running in this process, or FALSE otherwise.
+#' @export
+is_ufo <- function(object) {
+  system <- get_or_create(.ufo_core)
+  system$is_ufo(object)
+}
+
 #' Produces a lazily populated UFO vector of the given length and mode.
 #' The vector will be populated on access section by section. The vector
 #' will garbage collect cvhunks in response to memory pressure, so it can
@@ -105,14 +115,12 @@ ufo_vector_constructor <- function(mode, length, populate,
     # destroy <- compile(destroy)
 
     system <- get_or_create(.ufo_core)
-    print("XXX before");
     vector<-system$new_ufo(mode = mode, length = length,
                              user_data = list(...),
                              populate = populate, writeback = writeback,
                              reset = reset, destroy = destroy,
                              finalizer = finalizer, read_only = read_only,
                              chunk_length = chunk_length)
-    print("XXX after");
 
     if ((missing(add_class) && isTRUE(getOption("ufos.add_class", TRUE)))
        || (!missing(add_class) && isTRUE(add_class))) {

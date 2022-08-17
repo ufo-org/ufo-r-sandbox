@@ -399,6 +399,16 @@ impl UfoSystem {
 
         Ok(ufo)
     }
+
+    pub fn is_ufo(&self, object: Robj) -> Result<bool> {
+        let pointer = unsafe { object.get() };
+        let result = self.core.as_ref().get_ufo_by_address(pointer as usize);
+        match result {
+            Ok(_) => Ok(true),
+            Err(ufo_core::UfoInternalErr::UfoNotFound) => Ok(false),
+            Err(e) => Err(Error::Other(e.to_string())),
+        }
+    }
 }
 
 impl UfoSystem {
