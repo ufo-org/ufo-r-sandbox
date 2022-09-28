@@ -7,7 +7,6 @@ sqlite_table_columns <- function(db, table, ...)  {
     result <- DBI::dbSendQuery(connection, paste0("PRAGMA table_info(", DBI::dbQuoteIdentifier(connection, table), ")"))
     columns <- DBI::dbFetch(result)
     DBI::dbClearResult(result)
-    print(columns)
     columns$name
 }
 
@@ -53,14 +52,14 @@ sqlite_column_length <- function(db, table, column, ...)  {
 # Start and end are zero-indexed
 sqlite_populate_vector <- function(db, start, end, table, column, constructor, converter, ...) {
 
-    # print(paste0("db:          ", db))
-    # print(paste0("start:       ", start))
-    # print(paste0("end:         ", end))
-    # print(paste0("table:       ", table))
-    # print(paste0("column:      ", column))
+    print(paste0("db:          ", db))
+    print(paste0("start:       ", start))
+    print(paste0("end:         ", end))
+    print(paste0("table:       ", table))
+    print(paste0("column:      ", column))
     # print(paste0("constructor: ", constructor))
     # print(paste0("converter:   ", converter))
-    # print(paste0("...:         ", list(...)))
+    print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
 
@@ -75,13 +74,16 @@ sqlite_populate_vector <- function(db, start, end, table, column, constructor, c
     cursor <- as.integer(0)
 
     while (!DBI::dbHasCompleted(result)) {
+        print("***")        
         data <- DBI::dbFetch(result)
+        print(paste0("output length: ", length(output)))
+        print(paste0("data: ", data))
         end_position <- cursor + as.integer(nrow(data))
         output[cursor:end_position] <- converter(data[, column])
     }
 
-    # print("output:")
-    # print(output)
+    print("output:")
+    print(output)
 
     DBI::dbClearResult(result)
     DBI::dbDisconnect(connection)
@@ -169,19 +171,19 @@ sqlite_update_value <- function(connection, table, column, index, value) {
         " WHERE rowid == ", index))
 
     #DBI::dbGetRowsAffected(result)
-    DBI::dbClearResult(result)    
+    DBI::dbClearResult(result)
 }
 
 sqlite_update_values <- function(connection, table, column, start, end, indices, data) {
-    for (index in (start + 1):end) {        
-        print(indices);
-        print(paste0("sqlite update value: ", index));
+    for (index in (start + 1):end) {
+        print(indices)
+        print(paste0("sqlite update value: ", index))
         table_index <- indices[indices$ufo_index==index, ]$table_index
-        print(paste0("sqlite update value at table_index: ", table_index, "<-", data[index]));
+        print(paste0("sqlite update value at table_index: ", table_index, "<-", data[index]))
         sqlite_update_value(
-            connection=connection, table=table, column=column, 
+            connection=connection, table=table, column=column,
             index=table_index, value=data[index]
-        ) 
+        )
     }
 }
 
@@ -196,7 +198,6 @@ sqlite_writeback <- function(db, start, end, data, table, column, ...) {
     print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
-    print(data);
     DBI::dbBegin(connection)
         indices <- sqlite_get_table_indices(connection, table, start, end)
         sqlite_update_values(connection, table, column, start, end, indices, data)
@@ -246,8 +247,6 @@ ufo_sql_column <- function(db, table, column, ..., writeback = FALSE, driver = "
         }
 
     writeback <- if (writeback) { sqlite_writeback } else { NULL }
-    print("XXX")
-    print(writeback)
 
     # populate(db=db, start=1, end=column_length + 1, table=table, column=column, ...)
 
@@ -282,7 +281,8 @@ ufo_sql_table <- function(db, table, ...,  writeback = FALSE, driver = "SQLite")
         stop(paste0("Unsupported database driver: ", driver, ". Use one of: SQLite"))
     }
 
-    result <- lapply(columns, function(column) ufo_sql_column(db, table, column, ..., driver, writeback=writeback))
+    result <- lapply(columns, function(column) ufo_sql_column(db=db, table=table, column=column, ..., driver=driver, writeback=writeback))
     names(result) <- columns
+    as.data.frame(result)
 }
 

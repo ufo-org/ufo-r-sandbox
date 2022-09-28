@@ -49,7 +49,7 @@ will always be rounded up to a full memory page
 
 \item{add_class}{a logical value determining whether to add a \code{ufo} class
 to this vector. If not specified, checks
-\code{getOption("ufos.add_class")}. True by default.}
+whether the ufovectors package is loaded. False by default.}
 
 \item{...}{user data passed to populate, writeback, and finalizer functions,}
 }

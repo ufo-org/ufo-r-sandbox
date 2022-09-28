@@ -177,6 +177,8 @@ impl Sandbox {
         //     .expect_bytes_into()
         //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
 
+        eprintln!("    result: {result:?}");
+
         Ok(result)
     }
 

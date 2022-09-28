@@ -625,10 +625,10 @@ ufo_csv_scan <- function(path, offset_interval, header, token_buffer_size, chara
 
     construct_result <- function() {
         stretched_column_names <- character(max_columns)
-        stretched_column_names[1:length(column_names)] <- column_names
+        stretched_column_names[seq_len(length(column_names))] <- column_names
 
         stretched_column_types <- integer(max_columns)
-        stretched_column_types[1:length(column_types)] <- column_types
+        stretched_column_types[seq_len(length(column_types))] <- column_types
 
         data <- data.frame(
             column_names = stretched_column_names,
@@ -787,7 +787,7 @@ read_csv <- function (path, header=TRUE, offset_interval = 1000, token_buffer_si
     columns <- lapply(1:length(scan_info$column_names), function(i) {
         ufo_csv_read_column(scan_info, target_column = i)
     })
-    names(columns) <- scan_info$names
+    names(columns) <- scan_info$column_names
     
     csv <- do.call(data.frame, columns)
     return(csv)

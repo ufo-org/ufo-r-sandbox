@@ -2,7 +2,7 @@ use std::mem::size_of;
 
 use extendr_api::prelude::*;
 use itertools::Itertools;
-use libR_sys::Rf_mkChar;
+use libR_sys::Rf_mkCharLen;
 use ufo_ipc::{GenericValueBoxed, UnexpectedGenericType};
 
 use crate::{errors::IntoServerError, r_error};
@@ -102,10 +102,11 @@ impl UfoType {
         let bytes: Vec<u8> = strings
             .into_iter()
             .flat_map(|string| {
-                // println!("str: {:?}", string);
-                let character_vector = unsafe { Rf_mkChar(string.as_ptr() as *const i8) }; // FIXME this can trigger GC
-                                                                                           // let character_vector = unsafe { r!(string).get() };
-                                                                                           // println!("character_vector: {:?}", character_vector);
+                //println!("str: '{:?}'", string);
+                let character_vector = unsafe { 
+                    // FIXME this can trigger GC
+                    Rf_mkCharLen(string.as_ptr() as *const i8, string.len() as i32) 
+                }; 
                 let ne_bytes = (character_vector as usize).to_ne_bytes();
                 // println!("character_vector as ne_bytes: {:?}", ne_bytes);
                 ne_bytes

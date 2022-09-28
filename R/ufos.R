@@ -28,6 +28,9 @@ ufo_system_start <-
     low_water_mark
   }
 
+  print(paste0("HWM: ", high_water_mark_mb))
+  print(paste0("LWM: ", low_water_mark_mb))
+
   UfoSystem$initialize(
     as.character(directory),
     as.integer(high_water_mark_mb * 1024 * 1024),
@@ -114,13 +117,22 @@ ufo_vector_constructor <- function(mode, length, populate,
     # reset <- compile(reset)
     # destroy <- compile(destroy)
 
+    cat("ufo_vector_constructor\n");
+    cat(paste0("    mode:         ", mode, "\n"));
+    cat(paste0("    length:       ", length, "\n"));
+    cat(paste0("    read_only:    ", read_only, "\n"));
+    cat(paste0("    chunk_length: ", chunk_length, "\n"));
+
     system <- get_or_create(.ufo_core)
-    maybe_add_class(system$new_ufo(mode = mode, length = length,
+    x<-maybe_add_class(system$new_ufo(mode = mode, length = length,
                              user_data = list(...),
                              populate = populate, writeback = writeback,
                              reset = reset, destroy = destroy,
                              finalizer = finalizer, read_only = read_only,
                              chunk_length = chunk_length), add_class)
+
+    print("zzzz")
+    x
 }
 
 ufo_operators_is_loaded <- function() {
@@ -128,10 +140,14 @@ ufo_operators_is_loaded <- function() {
 }
 
 maybe_add_class <- function(vector, add_class) {
+  print("xxxx")
   if ((missing(add_class) && (ufo_operators_is_loaded()))
        || (!missing(add_class) && isTRUE(add_class))) {
+        print("xxxxxxxxx")
       class(vector) <- c("ufo", class(vector))
+      print("xxxxxxxxx")
   }
+  print("yyy")
   return(vector)
 }
 
