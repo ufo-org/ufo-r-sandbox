@@ -52,14 +52,14 @@ sqlite_column_length <- function(db, table, column, ...)  {
 # Start and end are zero-indexed
 sqlite_populate_vector <- function(db, start, end, table, column, constructor, converter, ...) {
 
-    print(paste0("db:          ", db))
-    print(paste0("start:       ", start))
-    print(paste0("end:         ", end))
-    print(paste0("table:       ", table))
-    print(paste0("column:      ", column))
+    # print(paste0("db:          ", db))
+    # print(paste0("start:       ", start))
+    # print(paste0("end:         ", end))
+    # print(paste0("table:       ", table))
+    # print(paste0("column:      ", column))
     # print(paste0("constructor: ", constructor))
     # print(paste0("converter:   ", converter))
-    print(paste0("...:         ", list(...)))
+    # print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
 
@@ -73,17 +73,16 @@ sqlite_populate_vector <- function(db, start, end, table, column, constructor, c
     output <- constructor()
     cursor <- as.integer(0)
 
-    while (!DBI::dbHasCompleted(result)) {
-        print("***")        
+    while (!DBI::dbHasCompleted(result)) { 
         data <- DBI::dbFetch(result)
-        print(paste0("output length: ", length(output)))
-        print(paste0("data: ", data))
+        # print(paste0("output length: ", length(output)))
+        # print(paste0("data: ", data))
         end_position <- cursor + as.integer(nrow(data))
         output[cursor:end_position] <- converter(data[, column])
     }
 
-    print("output:")
-    print(output)
+    # print("output:")
+    # print(output)
 
     DBI::dbClearResult(result)
     DBI::dbDisconnect(connection)
@@ -161,10 +160,10 @@ sqlite_get_table_indices <- function(connection, table, start, end) {
 }
 
 sqlite_update_value <- function(connection, table, column, index, value) {   
-    print(paste0( "CALLING :: ",
-        "UPDATE ", DBI::dbQuoteIdentifier(connection, table),
-        " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
-        " WHERE rowid == ", index))
+    # print(paste0( "CALLING :: ",
+    #     "UPDATE ", DBI::dbQuoteIdentifier(connection, table),
+    #     " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
+    #     " WHERE rowid == ", index))
     result <- DBI::dbSendStatement(connection, statement = paste0(
         "UPDATE ", DBI::dbQuoteIdentifier(connection, table), 
         " SET ", DBI::dbQuoteIdentifier(connection, column), " = ", DBI::dbQuoteLiteral(connection, value),
@@ -176,10 +175,10 @@ sqlite_update_value <- function(connection, table, column, index, value) {
 
 sqlite_update_values <- function(connection, table, column, start, end, indices, data) {
     for (index in (start + 1):end) {
-        print(indices)
-        print(paste0("sqlite update value: ", index))
+        # print(indices)
+        # print(paste0("sqlite update value: ", index))
         table_index <- indices[indices$ufo_index==index, ]$table_index
-        print(paste0("sqlite update value at table_index: ", table_index, "<-", data[index]))
+        # print(paste0("sqlite update value at table_index: ", table_index, "<-", data[index]))
         sqlite_update_value(
             connection=connection, table=table, column=column,
             index=table_index, value=data[index]
@@ -189,13 +188,13 @@ sqlite_update_values <- function(connection, table, column, start, end, indices,
 
 #constructor, converter,
 sqlite_writeback <- function(db, start, end, data, table, column, ...) {
-    print("WRITEBACK")
-    print(paste0("db:          ", db))
-    print(paste0("start:       ", start))
-    print(paste0("end:         ", end))
-    print(paste0("table:       ", table))
-    print(paste0("column:      ", column))
-    print(paste0("...:         ", list(...)))
+    # print("WRITEBACK")
+    # print(paste0("db:          ", db))
+    # print(paste0("start:       ", start))
+    # print(paste0("end:         ", end))
+    # print(paste0("table:       ", table))
+    # print(paste0("column:      ", column))
+    # print(paste0("...:         ", list(...)))
 
     connection <- do.call(DBI::dbConnect, c(drv = RSQLite::SQLite(), db, ...))
     DBI::dbBegin(connection)

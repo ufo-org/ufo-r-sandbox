@@ -44,7 +44,7 @@ impl Sandbox {
     }
 
     pub fn start() -> Result<Self> {
-        eprintln!("Sandbox::start");
+        log::debug!("Sandbox::start");
 
         let child = Command::new("R")
             .args(&["--vanilla", "--quiet", "-e", "ufosandbox:::start_sandbox()"])
@@ -58,9 +58,9 @@ impl Sandbox {
     }
 
     pub fn shutdown(&self) -> Result<()> {
-        eprintln!("Sandbox::shutdown:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("    pid:           {:?}", std::process::id());
+        log::debug!("Sandbox::shutdown:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("    pid:           {:?}", std::process::id());
 
         self.lock()?
             .shutdown(&[])
@@ -74,12 +74,12 @@ impl Sandbox {
         parameters: &[&str],
         return_type: UfoType,
     ) -> Result<FunctionToken> {
-        eprintln!("Sandbox::register_function:");
-        eprintln!("   self:           {:?}", self);
-        // eprintln!("   function:       {:?}", function);
-        eprintln!("   data_token:     {:?}", data_token);
-        eprintln!("   parameters:     {:?}", parameters);
-        eprintln!("   return_type:    {:?}", return_type);
+        log::debug!("Sandbox::register_function:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   function:       {:?}", function);
+        log::debug!("   data_token:     {:?}", data_token);
+        log::debug!("   parameters:     {:?}", parameters);
+        log::debug!("   return_type:    {:?}", return_type);
 
         let function_blob = function.as_slice();
         let parameters = parameters
@@ -109,11 +109,11 @@ impl Sandbox {
         data_token: DataToken,
         parameters: &[&str],
     ) -> Result<FunctionToken> {
-        eprintln!("Sandbox::register_procedure:");
-        eprintln!("   self:           {:?}", self);
-        // eprintln!("   function:       {:?}", function);
-        eprintln!("   data_token:     {:?}", data_token);
-        eprintln!("   parameters:     {:?}", parameters);
+        log::debug!("Sandbox::register_procedure:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   function:       {:?}", function);
+        log::debug!("   data_token:     {:?}", data_token);
+        log::debug!("   parameters:     {:?}", parameters);
 
         let function_blob = function.as_slice();
         let parameters = parameters
@@ -136,9 +136,9 @@ impl Sandbox {
     }
 
     pub fn register_data(&self, serialized: Vec<u8>) -> Result<DataToken> {
-        eprintln!("Sandbox::register_data:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   serialized:     {:?}", serialized);
+        log::debug!("Sandbox::register_data:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   serialized:     {:?}", serialized);
 
         let value = GenericValue::Vbytes(serialized.as_slice());
         let data_token = self
@@ -155,10 +155,10 @@ impl Sandbox {
         function_token: FunctionToken,
         arguments: &[GenericValue<&[u8], &str>],
     ) -> Result<Vec<GenericValueBoxed>> {
-        eprintln!("Sandbox::call_function:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   function_token: {:?}", function_token);
-        eprintln!("   arguments:      {:?}", arguments);
+        log::debug!("Sandbox::call_function:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   function_token: {:?}", function_token);
+        log::debug!("   arguments:      {:?}", arguments);
 
         let result = self
             .lock()?
@@ -177,7 +177,7 @@ impl Sandbox {
         //     .expect_bytes_into()
         //     .map_err(|e| r_error!("Invalid return value for function {:?} in sandbox: {}", function_token, e))?;
 
-        eprintln!("    result: {result:?}");
+        log::debug!("    result: {result:?}");
 
         Ok(result)
     }
@@ -187,10 +187,10 @@ impl Sandbox {
         function_token: FunctionToken,
         arguments: &[GenericValue<&[u8], &str>],
     ) -> Result<()> {
-        eprintln!("Sandbox::call_procedure:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   function_token: {:?}", function_token);
-        eprintln!("   arguments:      {:?}", arguments);
+        log::debug!("Sandbox::call_procedure:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   function_token: {:?}", function_token);
+        log::debug!("   arguments:      {:?}", arguments);
 
         let result = self
             .lock()?
@@ -210,9 +210,9 @@ impl Sandbox {
     }
 
     pub fn free_function(&self, function_token: &FunctionToken) -> Result<()> {
-        eprintln!("Sandbox::free_function:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   function_token: {:?}", function_token);
+        log::debug!("Sandbox::free_function:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   function_token: {:?}", function_token);
 
         self.lock()?
             .free_function(function_token, &[])
@@ -222,9 +222,9 @@ impl Sandbox {
     }
 
     pub fn free_data(&self, data_token: &DataToken) -> Result<()> {
-        eprintln!("Sandbox::free_data:");
-        eprintln!("   self:           {:?}", self);
-        eprintln!("   data_token: {:?}", data_token);
+        log::debug!("Sandbox::free_data:");
+        log::debug!("   self:           {:?}", self);
+        log::debug!("   data_token: {:?}", data_token);
 
         self.lock()?
             .free_data(data_token, &[])

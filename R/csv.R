@@ -36,7 +36,7 @@ print.buffer <- function(buffer, ...) {
         if (is.character(value)) {
             value <- sapply(value, function(v) paste0("'", v, "'"))
         }
-        cat(paste0("[", field, "]: ", paste(value, collapse=", "), "\n"))
+        # cat(paste0("[", field, "]: ", paste(value, collapse=", "), "\n"))
     }
 }
 
@@ -468,8 +468,7 @@ test <- function() {
     tokens <- character(0)
     browser()
     while (TRUE) {
-        result <- next_token(tokenizer)
-        print(result)
+        result <- next_token(tokenizer)        
         tokens <- c(tokens, unclass(result$token))
         if (is_final_state(result)) {
             break
@@ -516,7 +515,7 @@ row_index_at <- function(record, record_index) {
 
 offset_closest_to_this_row <- function(record, row_index) {
     target_index <- floor(row_index / record$row_interval) # TODO index might be wrong.
-    print(target_index)
+    # print(target_index)
     list (
         file_offset = record$file_offsets[target_index + 1],
         row_at_offset = (target_index * (record$row_interval)) + 1
@@ -724,7 +723,7 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
     offset_info <- offset_closest_to_this_row(attributes(scan_info)$offset_record, start_from_row)
     # seek to offset_info$file_offset
     # skip the rows between offset_info$row_at_offset and start_from_row
-    cat(paste0("Start from offset: ", offset_info$file_offset, " at row: ", offset_info$row_at_offset, "\n"))
+    # cat(paste0("Start from offset: ", offset_info$file_offset, " at row: ", offset_info$row_at_offset, "\n"))
 
     tokenizer <- new_tokenizer_from_scan_info(scan_info, offset_info$file_offset)
 
@@ -764,7 +763,7 @@ ufo_csv_read_column <- function(scan_info, target_column, start_from_row = 1, en
 test <- function(n=1,s=1, e=5) {
     # browser()
     scan_info <- ufo_csv_scan(path="test.csv", offset_interval=10, header=T, token_buffer_size=100, character_buffer_size=100)
-    print(scan_info)
+    # print(scan_info)
     ufo_csv_read_column(scan_info, target_column = n, start_from_row = s, end_at_row = e)
     # print(ufo_csv_read_column(scan_info, target_column = 2))
     # print(ufo_csv_read_column(scan_info, target_column = 3))

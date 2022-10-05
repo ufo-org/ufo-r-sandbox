@@ -102,13 +102,11 @@ impl UfoType {
         let bytes: Vec<u8> = strings
             .into_iter()
             .flat_map(|string| {
-                //println!("str: '{:?}'", string);
                 let character_vector = unsafe { 
                     // FIXME this can trigger GC
                     Rf_mkCharLen(string.as_ptr() as *const i8, string.len() as i32) 
                 }; 
                 let ne_bytes = (character_vector as usize).to_ne_bytes();
-                // println!("character_vector as ne_bytes: {:?}", ne_bytes);
                 ne_bytes
             })
             .collect();

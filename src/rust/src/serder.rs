@@ -60,7 +60,7 @@ pub trait DeserdeR: Sized {
 
 impl DeserdeR for &[u8] {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!(
+        log::debug!(
             "Calling unserializer on {:?}{}",
             self.iter().take(10).collect::<Vec<&u8>>(),
             if self.len() > 10 { ".." } else { "" }
@@ -71,19 +71,19 @@ impl DeserdeR for &[u8] {
 
 impl DeserdeR for &Vec<u8> {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!(
+        log::debug!(
             "Calling unserializer on {:?}{}",
             self.iter().take(10).collect::<Vec<&u8>>(),
             if self.len() > 10 { ".." } else { "" }
         );
-        eprintln!("Calling unserializer on {self:?}");
+        log::debug!("Calling unserializer on {self:?}");
         call!("unserialize", self)
     }
 }
 
 impl DeserdeR for Vec<u8> {
     fn deserialize(self) -> Result<Robj> {
-        eprintln!(
+        log::debug!(
             "Calling unserializer on {:?}{}",
             self.iter().take(10).collect::<Vec<&u8>>(),
             if self.len() > 10 { ".." } else { "" }
@@ -150,23 +150,20 @@ where
 
 impl SmartDeserialization for &[u8] {
     fn smart_deserialize(&self) -> Result<Robj> {
-        eprintln!(
-            "Calling smaert_deserializer on {:?}{}",
+        log::debug!(
+            "Calling smart_deserializer on {:?}{}",
             self.iter().take(10).collect::<Vec<&u8>>(),
             if self.len() > 10 { ".." } else { "" }
         );
 
         let sxp = i32::from_le_bytes(self[0..4].try_into().unwrap());
-        eprintln!("DESER SEXPTYPE {sxp}");
+        
         let usize_size_in_bytes = usize::BITS as usize / 8;
         let length = usize::from_le_bytes(self[4..(4 + usize_size_in_bytes)].try_into().unwrap());
 
-        eprintln!("DESER length {length}");
         let data = &self[4 + usize_size_in_bytes..];
-        eprintln!("DESER data {data:?}");
 
         let rtype = sxp_to_rtype(sxp);
-        eprintln!("DESER Rtype {rtype:?}");
         let elements = length / rtype.element_size().unwrap();
 
         match rtype {
@@ -183,34 +180,26 @@ impl SmartDeserialization for &[u8] {
                 let mut cursor = 0;
                 let mut string_index = 0;
                 while cursor < data.len() {
-                    eprintln!("DESER cursor at {cursor}");
                     let character_length = usize::from_le_bytes(
                         data[cursor..cursor + usize_size_in_bytes]
                             .try_into()
                             .unwrap(),
                     );
-                    eprintln!("DESER character_length {character_length}");
                     cursor += usize_size_in_bytes;
-                    eprintln!("DESER cursor at {cursor}");
                     let character_data = &data[cursor..cursor + character_length];
-                    eprintln!("DESER character_data {character_data:?}");
                     cursor += character_length;
-                    eprintln!("DESER cursor at {cursor}");
-                    let character_vector = character_data
-                        .iter()
-                        .map(|u| (*u) as char)
-                        .collect::<Vec<char>>();
-                    eprintln!("String!!!: {:?}", character_vector);
+                    // let character_vector = character_data
+                    //     .iter()
+                    //     .map(|u| (*u) as char)
+                    //     .collect::<Vec<char>>();
                     let character_sexp =
                         unsafe { Rf_protect(Rf_mkChar(character_data.as_ptr() as *const i8)) };
-                    eprintln!("String sexp: {:?}", Robj::from_sexp(character_sexp));
                     unsafe { SET_STRING_ELT(strings_sexp, string_index, character_sexp) }
                     string_index += 1;
                 }
 
                 let strings = Robj::from_sexp(strings_sexp);
                 unsafe { Rf_unprotect(1 + string_index as i32) }
-                eprintln!("DESER produced string vector: {strings:?}");
                 Ok(strings)
             }
 
@@ -244,7 +233,7 @@ pub trait SmartSerialization {
 impl SmartSerialization for Rtype {
     fn smart_serialize(&self, memory: *const u8, elements: usize) -> Vec<u8> {
         let length_in_bytes = elements * self.element_size().unwrap();
-        eprintln!("   bytes:          {:?}", length_in_bytes);
+        log::debug!("   bytes:          {:?}", length_in_bytes);
 
         let mut vector = Vec::new();
         vector.extend_from_slice(&self.as_sxp().to_le_bytes());
@@ -254,19 +243,19 @@ impl SmartSerialization for Rtype {
             Rtype::Strings => {
                 let sexp_data: &[SEXP] =
                     unsafe { std::slice::from_raw_parts(memory as *const SEXP, elements) };
-                println!("SEXP data: {:?}", sexp_data);
+                
                 for character_sexp in sexp_data {
                     let character_length = unsafe { XLENGTH(*character_sexp) as usize };
                     let character_data = unsafe { DATAPTR(*character_sexp as SEXP) as *const u8 };
                     let character_bytes: &[u8] =
                         unsafe { std::slice::from_raw_parts(character_data, character_length) };
 
-                    unsafe {
-                        eprintln!(
-                            "String!: {:?}",
-                            std::ffi::CStr::from_ptr(character_data as *const i8)
-                        );
-                    }
+                    // unsafe {
+                    //     eprintln!(
+                    //         "String!: {:?}",
+                    //         std::ffi::CStr::from_ptr(character_data as *const i8)
+                    //     );
+                    // }
 
                     vector.extend_from_slice(&(character_length + 1).to_le_bytes());
                     vector.extend_from_slice(character_bytes);
@@ -275,10 +264,6 @@ impl SmartSerialization for Rtype {
             }
 
             Rtype::Integers | Rtype::Logicals | Rtype::Doubles | Rtype::Complexes | Rtype::Raw => {
-                eprintln!(
-                    "{:?} ... len: {} bytes: {}",
-                    self, elements, length_in_bytes
-                );
                 let bytes: &[u8] =
                     unsafe { std::slice::from_raw_parts(memory as *const u8, length_in_bytes) };
                 vector.extend_from_slice(bytes);

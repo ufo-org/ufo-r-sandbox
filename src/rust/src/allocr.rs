@@ -1,10 +1,11 @@
 use crate::*;
+use log;
 
 macro_rules! try_or_yell_impotently {
     ($stuff:expr) => {
         match ($stuff) {
             Err(e) => {
-                eprintln!("Ufo error: {}", e);
+                log::error!("Ufo error: {}", e);
             }
             Ok(_) => (),
         }
@@ -15,7 +16,7 @@ macro_rules! try_or_null {
     ($stuff:expr) => {
         match ($stuff) {
             Err(e) => {
-                eprintln!("Ufo error: {}", e);
+                log::error!("Ufo error: {}", e);
                 return std::ptr::null_mut();
             }
             Ok(result) => result,

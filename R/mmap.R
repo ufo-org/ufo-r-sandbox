@@ -31,7 +31,7 @@ ufo_mmap_character <- function(paths, offset, extent, writeback = FALSE, fill = 
         stop("Paths can be of the same length as extent (",
              extent, ") or of length 1, but it is: ", length(paths))
 
-    print("construct!")
+    # print("construct!")
     ufo_character_constructor(
         length = length(offset),
         populate = ufo_mmap_character_populate,
@@ -55,19 +55,19 @@ ufo_mmap_character_populate <- function(start, end, paths, offsets, extents, ...
 
     sapply((start+1):end, function(index) {
         data <- mmaps[[which_file(index)]]
-        print("offset")
-        print(offsets[index])
-        print("extent")
-        print(extents[index])
+        # print("offset")
+        # print(offsets[index])
+        # print("extent")
+        # print(extents[index])
 
         span <- offsets[index]:(offsets[index]+extents[index])
-        print("span")
-        print(span)
+        # print("span")
+        # print(span)
 
         word <- mmap:::`[.mmap`(data, span)
         char <- rawToChar(word)
-        print("char")
-        print(char)
+        # print("char")
+        # print(char)
         char
     })
 }
@@ -82,32 +82,32 @@ ufo_mmap_character_writeback <- function(start, end, data, paths, offsets, exten
     names(mmaps) <- files
 
     for (index in (start+1:end)) {
-        print(paste0("WRITEBACK!", index))
+        # print(paste0("WRITEBACK!", index))
 
         map <- mmaps[[which_file(index)]]
 
         span <- offsets[index]:(offsets[index]+extents[index])
-        print("span")
-        print(span)
+        # print("span")
+        # print(span)
 
         current_length <- nchar(data[index])
         expected_length <- length(span)
         replacement_value <- paste0(data[index], paste(character(expected_length - current_length + 1), collapse=fill))
 
-        print("replacing ")
+        # print("replacing ")
         word <- mmap:::`[.mmap`(map, span)
-        print(rawToChar(word))
+        # print(rawToChar(word))
 
-        print("with")
-        print(replacement_value)
+        # print("with")
+        # print(replacement_value)
 
         word <- mmap:::`[<-.mmap`(map, span, value=charToRaw(replacement_value))
         word <- mmap:::`[.mmap`(map, span)
 
         mmap:::msync(map)
 
-        print("and now")
-        print(rawToChar(word))
+        # print("and now")
+        # print(rawToChar(word))
 
         NULL
     }
